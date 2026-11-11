@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
 <meta name="theme-color" content="#302249" />
-<title>우리 반 성장 마을 v5 · 칭호와 오라 펫</title>
+<title>우리 반 성장 마을 v6 · 학급 미션과 교사 관리</title>
 <style>
 :root{--gold:#ffd87e;--cream:#fff3d5;--ink:#3b2945;--deep:#261a3e;--sky:#a8eeff;--line:#fbe2a2}
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#23233f;color:#fff;font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;-webkit-tap-highlight-color:transparent}button,select,input,textarea{font:inherit}button{cursor:pointer;touch-action:manipulation}button:disabled{opacity:.55;cursor:not-allowed}
@@ -38,20 +38,28 @@
 .titlePicks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:10px 0}.titlePicks button{font-size:12px}
 #modal.teacherWide{width:min(750px,100%)}.teacherScroll{max-height:270px;overflow:auto;border:1px solid #e8cfaa;border-radius:10px}
 @media(max-width:750px){#broadcast{bottom:81px;left:9px;transform:none;max-width:calc(100vw - 154px);font-size:10px;padding:6px 8px}#teacherTitlesBtn{font-size:16px}#leftNav .teacherNav{display:none}}
+
+/* v6 학급 운영 패널 */
+.v6tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.v6tabs button{padding:8px 11px;border-radius:11px;background:#f8e6c5;border:1px solid #dbb684;color:#55364c;font-weight:800}.v6tabs button.active{background:#7551b2;color:#fff;border-color:#593693}
+.v6grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.v6stat{background:#fff4d9;border:1px solid #d8b88a;color:#60425b;border-radius:10px;padding:9px}.v6stat b{font-size:18px;display:block}
+.v6table{width:100%;border-collapse:collapse;font-size:12px}.v6table td,.v6table th{border-bottom:1px solid #ebdcc6;padding:8px 4px;text-align:left}.v6scroll{max-height:340px;overflow:auto}.v6row{border:1px solid #e4ccb0;background:#fff7e9;border-radius:12px;padding:10px;margin:8px 0}.v6row h3{font-size:14px;margin:0 0 5px}.v6row p{margin:4px 0;font-size:12px;color:#725e6b;white-space:pre-wrap;overflow-wrap:anywhere}.v6row button{margin:3px 3px 2px 0}.v6hint{font-size:12px;color:#78647b;margin:8px 0}.v6inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.v6inline>input{min-width:75px;flex:1}.v6inline>select{min-width:95px;flex:1}
+@media(max-width:750px){.v6grid{grid-template-columns:1fr}.v6table{font-size:11px}#teacherManageBtn{font-size:15px}}
 </style>
 </head>
 <body>
 <div id="shell">
 <canvas id="game" aria-label="우리 반 성장 마을의 움직이는 캐릭터와 건물"></canvas>
 <div id="top">
-  <div class="panel brand"><h1>🌸 우리 반 성장 마을 🏡</h1><p>28명이 함께 키우는 마을 · 로그인 없는 v5 체험판</p></div>
+  <div class="panel brand"><h1>🌸 우리 반 성장 마을 🏡</h1><p>28명이 함께 키우는 마을 · 로그인 없는 v6 학급 체험판</p></div>
   <div class="panel progress"><div class="kicker"><span>👑 <span id="stageText">Lv.1 · 아기</span></span><span class="levelXp" id="xpText">0 / 78 XP</span></div><div class="track"><div id="xpFill" class="fill"></div></div><div class="tiny"><span id="villageText">🏡 마을 Lv.1 · 공동 XP 0</span> · <span id="coinText">0 코인</span></div></div>
   <div class="panel counter">🌱 학급 구성원 <strong>28명</strong></div>
-  <div class="topActions"><button class="roundBtn" title="선생님 칭호 수여 (체험용)" id="teacherTitlesBtn">👩🏻‍🏫</button><button class="roundBtn" title="마을 발전 보기" id="townTop">🏡</button><button class="roundBtn" title="성장 체험" id="growTop">✨</button><button class="roundBtn" title="도움말" id="helpTop">❔</button><button class="roundBtn" title="화면 크게" id="fullTop">⛶</button></div>
+  <div class="topActions"><button class="roundBtn" title="학급 운영 (체험용)" id="teacherManageBtn">📋</button><button class="roundBtn" title="선생님 칭호 수여 (체험용)" id="teacherTitlesBtn">👩🏻‍🏫</button><button class="roundBtn" title="마을 발전 보기" id="townTop">🏡</button><button class="roundBtn" title="성장 체험" id="growTop">✨</button><button class="roundBtn" title="도움말" id="helpTop">❔</button><button class="roundBtn" title="화면 크게" id="fullTop">⛶</button></div>
 </div>
 <div id="leftNav">
   <button class="navBtn active" data-open="village"><i>🏠</i> 마을 홈</button>
-  <button class="navBtn" data-open="missions"><i>✅</i> 오늘의 미션</button>
+  <button class="navBtn" data-open="missions"><i>✅</i> 학급 미션 제출</button>
+  <button class="navBtn" data-open="myProfile"><i>🪪</i> 나의 프로필</button>
+  <button class="navBtn teacherNav" data-open="teacherManage"><i>📋</i> 학급 운영 (선생님)</button>
   <button class="navBtn" data-open="class"><i>🧑‍🤝‍🧑</i> 학급 활동</button>
   <button class="navBtn" data-open="town"><i>🌳</i> 마을 발전</button><button class="navBtn" data-open="growth"><i>🌱</i> 캐릭터 성장</button>
   <button class="navBtn" data-open="shop"><i>🎁</i> 꾸미기 상점</button>
@@ -60,7 +68,7 @@
 <div id="missionPanel"><div class="title">⭐ 오늘의 공동 미션</div><div class="lines" id="missionLines"></div><div class="missionFoot"><div class="progressGreen"><b id="missionBar"></b></div><p id="missionCount">0 / 5 완료</p></div></div>
 <div id="stageSwitcher" aria-label="마을 레벨별 배경 비교"><button id="stagePrev" title="이전 마을 단계" aria-label="이전 단계">◀</button><div class="stageMiddle"><b id="stageMapName">🌱 Lv.1 개척 마을</b><span>배경 전체가 바뀌는 마을</span></div><button id="stageNext" title="다음 마을 단계" aria-label="다음 단계">▶</button><button id="stageReal" title="실제 진행도로 돌아가기" aria-label="실제 진행도로 돌아가기">↺</button></div>
 <div id="broadcast" aria-live="polite">📣 우리 반 성장 마을에 오신 걸 환영합니다!</div><div id="badgeNow">⭐ 1번 주민 · <span id="nameStage">아기</span> · 방향키 / 터치로 이동</div>
-<div id="bottomBar"><div class="teacherBubble">👩🏻‍🏫 <b>담임선생님의 한마디 💜</b><br>우리 반이 함께 모험하며 성장하는 마을이에요!<div class="smaller">※ 이 화면과 학생 정보는 체험용 가상 데이터입니다.</div></div><div class="actionBar"><button class="quick" data-open="checkin"><span>📅</span>출석</button><button class="quick" data-open="missions"><span>✅</span>미션 인증</button><button class="quick" data-open="praise"><span>💗</span>칭찬하기</button><button class="quick" data-open="growth"><span>✨</span>성장 체험</button></div></div>
+<div id="bottomBar"><div class="teacherBubble">👩🏻‍🏫 <b>담임선생님의 한마디 💜</b><br>우리 반이 함께 모험하며 성장하는 마을이에요!<div class="smaller">※ 이 화면과 학생 정보는 체험용 가상 데이터입니다.</div></div><div class="actionBar"><button class="quick" data-open="checkin"><span>📅</span>출석</button><button class="quick" data-open="missions"><span>✅</span>미션 제출</button><button class="quick" data-open="praise"><span>💗</span>칭찬하기</button><button class="quick" data-open="myProfile"><span>🪪</span>내 프로필</button></div></div>
 <div id="controlPad"><button class="up" data-dir="up" aria-label="위로">▲</button><button class="left" data-dir="left" aria-label="왼쪽">◀</button><button class="down" data-dir="down" aria-label="아래로">▼</button><button class="right" data-dir="right" aria-label="오른쪽">▶</button></div>
 <button id="helpButton">🎮 이동 방법</button><div id="toast" role="status"></div>
 <div id="overlay"><section id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><button class="close" id="closeModal" aria-label="닫기">×</button><h2 id="modalTitle"></h2><div id="modalContent"></div></section></div>
@@ -141,6 +149,91 @@ function openTeacherTitles(){openModal('👩🏻‍🏫 선생님 전용 칭호 
  $('honorSubmit').onclick=()=>{setHonor($('honorStudent').value,$('honorCustom').value);renderTeacherPanel()};$('honorRemove').onclick=()=>{setHonor($('honorStudent').value,'');renderTeacherPanel()};
  $('honorSetLevel').onclick=()=>{setStudentLevel($('honorStudent').value,$('honorLevel').value);renderTeacherPanel()};el.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{setStudentLevel($('honorStudent').value,b.dataset.jump);renderTeacherPanel()});
  });}
+// v6: Separate local-only student profiles, teacher mission catalog and approval records.
+// This is a role simulator. Firebase Auth and server-side authorization are NOT enabled here.
+const v6Key='class_village_v6_management';
+const v6Seed=()=>({missions:[
+ {id:'m1',name:'아침 독서 10분',desc:'읽은 책과 인상 깊었던 문장을 적어 보세요.',xp:35,active:true},
+ {id:'m2',name:'과학 탐구 미션',desc:'오늘 새롭게 알게 된 과학 사실을 한 문장으로 적어 보세요.',xp:45,active:true},
+ {id:'m3',name:'학급 정리 도우미',desc:'학급을 정리한 활동을 간단히 기록하세요.',xp:30,active:true},
+ {id:'m4',name:'친구에게 칭찬 전달',desc:'친구의 좋은 점을 적어 보세요.',xp:25,active:true}],
+ submissions:[],students:Object.fromEntries(Array.from({length:28},(_,i)=>[i+1,{nickname:`${i+1}번 주민`,xp:0,notes:''}])),studyLogs:[],events:[]});
+let v6=safeParse(v6Key,v6Seed());
+if(!Array.isArray(v6.missions)||!Array.isArray(v6.submissions)||!v6.students||!Array.isArray(v6.events)||!Array.isArray(v6.studyLogs))v6=v6Seed();
+for(let i=1;i<=28;i++){if(!v6.students[i])v6.students[i]={nickname:`${i}번 주민`,xp:0,notes:''};v6.students[i].xp=Number(v6.students[i].xp)||0;}
+const v6save=()=>{try{localStorage.setItem(v6Key,JSON.stringify(v6))}catch{toast('저장 공간 부족: 브라우저 기록을 저장하지 못했어')}};
+let v6TeacherTab='pending';
+let v6DemoRole='student';
+const v6Student=(id)=>v6.students[Number(id)]||{nickname:`${id}번 주민`,xp:0};
+const v6Counts=(id)=>({approved:v6.submissions.filter(s=>s.studentId===id&&s.status==='approved').length,pending:v6.submissions.filter(s=>s.studentId===id&&s.status==='pending').length});
+function v6GrantXP(id,amount,reason){
+ id=Number(id);amount=Math.max(0,Math.min(500,Math.round(Number(amount)||0)));
+ if(!(id>=1&&id<=28)||amount<=0)return false;
+ const oldTownStage=actualTownStage();const profile=v6Student(id);profile.xp+=amount;
+ const before=studentLevel(id);let level=before,xp=profile.xp;
+ while(xp>=maxXp(level)&&level<99){xp-=maxXp(level);level++;}
+ profile.xp=xp;
+ if(level!==before){setStudentLevel(id,level);announce(`🎉 ${id}번 학생이 Lv.${level}로 성장했어요!`)}
+ state.townXP+=amount;state.coins+=id===state.chosen?10:0;save();
+ v6.events.push({id:'e'+Date.now()+Math.random().toString(36).slice(2,7),studentId:id,amount,reason,date:new Date().toLocaleString('ko-KR')});v6.events=v6.events.slice(-500);
+ if(actualTownStage()>oldTownStage){previewTown=null;villageSparkle=2.8;fireworksAt(id);announce(`🏡 마을이 Lv.${actualTownStage()}로 성장했어요!`)}
+ v6save();updateUI();return true;
+}
+function v6Submit(mid,detail){
+ const mission=v6.missions.find(m=>m.id===mid&&m.active);if(!mission)return toast('종료된 미션이야');
+ const id=state.chosen;detail=String(detail||'').trim();if(detail.length<3)return toast('활동 내용을 3글자 이상 적어 줘');
+ if(detail.length>250)return toast('활동 내용은 250자 이내로 적어 줘');
+ if(v6.submissions.some(s=>s.missionId===mid&&s.studentId===id&&s.status!=='rejected'))return toast('이 미션은 이미 신청했거나 승인됐어');
+ v6.submissions.push({id:'s'+Date.now()+Math.random().toString(36).slice(2,7),missionId:mid,studentId:id,detail,status:'pending',date:new Date().toLocaleString('ko-KR')});
+ v6save();updateUI();announce(`📨 ${id}번 학생이 「${mission.name}」 미션을 제출했어요!`);toast('📨 제출 완료! 선생님 승인을 기다려 줘');openV6Missions();
+}
+function v6Approve(sid,decision){
+ const sub=v6.submissions.find(s=>s.id===sid);if(!sub||sub.status!=='pending')return toast('이미 처리된 제출이야');
+ const mission=v6.missions.find(m=>m.id===sub.missionId);if(!mission)return toast('미션 정보를 찾을 수 없어');
+ sub.status=decision==='approved'?'approved':'rejected';sub.reviewed=new Date().toLocaleString('ko-KR');
+ if(sub.status==='approved')v6GrantXP(sub.studentId,mission.xp,'미션 승인: '+mission.name);
+ v6save();toast(sub.status==='approved'?`✅ ${sub.studentId}번 승인 · +${mission.xp} XP`:'↩️ 반려 완료');openV6Teacher('pending');
+}
+function openV6Missions(){
+ const id=state.chosen;
+ openModal(`✅ ${id}번 주민 · 학급 미션`, `<p class="desc">선생님이 만든 미션에 활동 내용을 제출하고, 승인되면 개인 레벨과 마을 XP가 올라가. <b>로그인 없는 체험판: 학생 선택은 누구나 바꿀 수 있어.</b></p>
+ ${v6.missions.filter(m=>m.active).map(m=>{const sub=v6.submissions.find(s=>s.missionId===m.id&&s.studentId===id&&s.status!=='rejected');return `<div class="v6row"><h3>🎯 ${escapeText(m.name)} <span class="badge">+${m.xp} XP</span></h3><p>${escapeText(m.desc)}</p>${sub?`<span class="badge">${sub.status==='pending'?'⏳ 승인 대기':'✅ 승인 완료'}</span><p>${escapeText(sub.detail)}</p>`:`<textarea class="field" rows="2" maxlength="250" placeholder="어떤 활동을 했는지 적어 줘" data-proof="${escapeText(m.id)}"></textarea><button class="primary" data-submit="${escapeText(m.id)}">📨 완료 인증 제출</button>`}</div>`}).join('')||'<p>현재 등록된 미션이 없어.</p>'}
+ <p class="v6hint">미션은 학생당 승인 1회 기준이며, 반려된 미션은 재제출할 수 있어. 교사 승인은 현재 브라우저 안에서만 체험할 수 있어.</p>`,el=>{el.querySelectorAll('[data-submit]').forEach(b=>b.onclick=()=>v6Submit(b.dataset.submit,el.querySelector(`[data-proof="${b.dataset.submit}"]`).value))});
+}
+function openV6Profile(id=state.chosen){
+ id=Number(id);let p=v6Student(id),c=v6Counts(id),subs=v6.submissions.filter(s=>s.studentId===id),logs=v6.studyLogs.filter(s=>s.studentId===id);
+ openModal(`🪪 ${id}번 주민의 성장 카드`, `<div class="v6grid"><div class="v6stat">📈 캐릭터 레벨<b>Lv.${studentLevel(id)}</b></div><div class="v6stat">✨ 다음 레벨 XP<b>${p.xp} / ${maxXp(studentLevel(id))}</b></div><div class="v6stat">🏅 선생님 칭호<b style="font-size:13px">${escapeText(honorData.titles[id]||'아직 없음')}</b></div><div class="v6stat">✅ 승인 / ⏳ 대기<b>${c.approved} / ${c.pending}</b></div></div>
+ <h3>📚 나의 공부 기록</h3><div class="v6scroll">${logs.slice(-6).reverse().map(x=>`<div class="choice">${escapeText(x.subject)} · ${x.minutes}분 <small>${escapeText(x.date)}</small></div>`).join('')||'<p class="v6hint">아직 기록이 없어.</p>'}</div>
+ <h3>📋 나의 미션 기록</h3><div class="v6scroll">${subs.slice(-12).reverse().map(s=>{let m=v6.missions.find(m=>m.id===s.missionId);return `<div class="choice"><span>${escapeText(m?.name||'삭제된 미션')}<br><small>${escapeText(s.detail)}</small></span><span class="badge">${s.status==='approved'?'✅ 승인':s.status==='pending'?'⏳ 대기':'↩ 반려'}</span></div>`}).join('')||'<p class="v6hint">아직 제출 기록이 없어.</p>'}</div>
+ <p class="v6hint">이 화면은 현재 선택한 학생의 정보만 보여줘. 실제 배포 시 다른 학생의 개인 기록을 볼 수 없도록 Firebase 규칙으로 보호할 예정이야.</p>`);
+}
+function openV6Study(){
+ const id=state.chosen;
+ openModal(`📚 ${id}번 주민 · 공부 기록`, `<p class="desc">공부 기록은 학생별로 구분해서 저장돼. 공부 시간 자체에는 자동 XP를 지급하지 않으며, 학습 미션을 제출해 교사 승인을 받아야 XP가 올라가.</p><label>과목</label><select class="field" id="v6subject">${['과학','국어','수학','영어','사회','기타'].map(x=>`<option>${x}</option>`).join('')}</select><label>공부 시간(분)</label><input type="number" id="v6minutes" min="1" max="240" value="20" class="field"><label>학습 내용 (선택)</label><input class="field" maxlength="100" id="v6note" placeholder="오늘 공부한 내용"><button class="primary wide" id="v6studySave" style="margin-top:10px">공부 기록 저장</button><div class="v6scroll">${v6.studyLogs.filter(s=>s.studentId===id).slice(-5).reverse().map(s=>`<div class="choice">${escapeText(s.subject)} · ${s.minutes}분<br><small>${escapeText(s.note)} · ${escapeText(s.date)}</small></div>`).join('')}</div>`,el=>{el.querySelector('#v6studySave').onclick=()=>{const mins=Number(el.querySelector('#v6minutes').value);if(!Number.isInteger(mins)||mins<1||mins>240)return toast('공부 시간은 1~240분으로 입력해 줘');v6.studyLogs.push({studentId:id,subject:el.querySelector('#v6subject').value,minutes:mins,note:el.querySelector('#v6note').value.trim(),date:new Date().toLocaleString('ko-KR')});v6save();toast('📚 공부 기록 저장 완료');openV6Study()}});
+}
+function openV6Teacher(tab=v6TeacherTab){
+ v6TeacherTab=tab;v6DemoRole='teacher';
+ const pending=v6.submissions.filter(s=>s.status==='pending');
+ const tabs=[['pending','📨 승인 대기'],['missions','📝 미션 관리'],['members','👥 28명 관리'],['records','📊 활동 내역']];
+ const head=`<p class="desc"><b>👩🏻‍🏫 선생님 관리실</b> · 로그인 없는 체험 모드라 누구나 접근 가능해. 실제 학급 배포 전에는 별도 Firebase Authentication·Security Rules로 교사만 수정 가능하게 해야 해.</p><div class="v6tabs">${tabs.map(([key,label])=>`<button data-v6tab="${key}" class="${tab===key?'active':''}">${label}</button>`).join('')}</div>`;
+ let body='';
+ if(tab==='pending')body=`<div class="v6grid"><div class="v6stat">승인 대기<b>${pending.length}건</b></div><div class="v6stat">누적 승인<b>${v6.submissions.filter(s=>s.status==='approved').length}건</b></div></div><div class="v6scroll">${pending.map(s=>{const m=v6.missions.find(m=>m.id===s.missionId);return `<div class="v6row"><h3>📨 ${s.studentId}번 · ${escapeText(m?.name||'미션 없음')} <span class="badge">+${m?.xp||0} XP</span></h3><p>${escapeText(s.detail)}</p><p>${escapeText(s.date)}</p><button class="primary" data-approve="${escapeText(s.id)}">✅ 승인</button><button class="primary secondary" data-reject="${escapeText(s.id)}">↩ 반려</button></div>`}).join('')||'<p class="v6hint">대기 중인 미션이 없어. 학생 캐릭터로 전환해서 미션을 먼저 제출해 봐.</p>'}</div>`;
+ if(tab==='missions')body=`<label>새 미션 제목</label><input id="v6newName" class="field" maxlength="40" placeholder="예: 우리 반 탐구 일지"><label>미션 설명</label><textarea id="v6newDesc" class="field" maxlength="150" rows="2" placeholder="어떤 활동을 해야 하는지 작성"><label>승인 시 지급할 XP (1~100)</label><input id="v6newXp" class="field" type="number" min="1" max="100" value="30"><button id="v6create" class="primary wide" style="margin-top:9px">➕ 미션 등록</button><h3>현재 미션</h3><div class="v6scroll">${v6.missions.map(m=>`<div class="v6row"><h3>${escapeText(m.name)} · +${m.xp} XP</h3><p>${escapeText(m.desc)}</p><span class="badge">${m.active?'운영 중':'종료'}</span><button class="primary secondary" data-toggle="${escapeText(m.id)}">${m.active?'⏸ 종료':'▶ 재개'}</button></div>`).join('')}</div>`;
+ if(tab==='members')body=`<p class="v6hint">번호를 눌러 개인 성장 카드 확인. 실명 대신 번호·별명만 사용.</p><div class="v6scroll"><table class="v6table"><thead><tr><th>학생</th><th>레벨</th><th>승인/대기</th><th>개인 XP</th><th>관리</th></tr></thead><tbody>${Array.from({length:28},(_,i)=>{const id=i+1,p=v6Student(id),c=v6Counts(id);return `<tr><td><b>${id}번</b></td><td>Lv.${studentLevel(id)}</td><td>${c.approved}/${c.pending}</td><td>${p.xp}</td><td><button class="primary secondary" data-profile="${id}">조회</button><button class="primary secondary" data-select="${id}">선택</button></td></tr>`}).join('')}</tbody></table></div><p class="v6hint">학생별 칭호와 레벨의 직접 조정은 기존 👩🏻‍🏫 버튼에서 가능해.</p>`;
+ if(tab==='records')body=`<div class="v6grid"><div class="v6stat">제출 총계<b>${v6.submissions.length}</b></div><div class="v6stat">공부 기록<b>${v6.studyLogs.length}</b></div><div class="v6stat">공동 경험치<b>${state.townXP}</b></div><div class="v6stat">등록 미션<b>${v6.missions.length}</b></div></div><h3>최근 경험치 지급 내역</h3><div class="v6scroll">${v6.events.slice(-25).reverse().map(e=>`<div class="choice">${e.studentId}번 +${e.amount} XP<br><small>${escapeText(e.reason)} · ${escapeText(e.date)}</small></div>`).join('')||'<p class="v6hint">아직 지급 기록이 없어.</p>'}</div><button id="v6export" class="primary secondary wide" style="margin-top:12px">📥 학급 운영 데이터 JSON 백업</button>`;
+ openModal('📋 학급 운영 관리자',head+body,el=>{
+ $('modal').classList.add('teacherWide');
+ el.querySelectorAll('[data-v6tab]').forEach(b=>b.onclick=()=>openV6Teacher(b.dataset.v6tab));
+ el.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>v6Approve(b.dataset.approve,'approved'));
+ el.querySelectorAll('[data-reject]').forEach(b=>b.onclick=()=>v6Approve(b.dataset.reject,'rejected'));
+ el.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=()=>{const m=v6.missions.find(m=>m.id===b.dataset.toggle);if(m){m.active=!m.active;v6save();openV6Teacher('missions')}});
+ el.querySelectorAll('[data-profile]').forEach(b=>b.onclick=()=>openV6Profile(Number(b.dataset.profile)));
+ el.querySelectorAll('[data-select]').forEach(b=>b.onclick=()=>{state.chosen=Number(b.dataset.select);save();updatePlayerFromNpc();openV6Teacher('members');toast(`${state.chosen}번 학생으로 체험 대상을 변경했어`)});
+ if(el.querySelector('#v6create'))el.querySelector('#v6create').onclick=()=>{const name=el.querySelector('#v6newName').value.trim(),desc=el.querySelector('#v6newDesc').value.trim(),xp=Number(el.querySelector('#v6newXp').value);if(name.length<2||name.length>40)return toast('미션 제목을 2~40자로 입력해 줘');if(!Number.isInteger(xp)||xp<1||xp>100)return toast('XP는 1~100 사이로 입력해 줘');v6.missions.push({id:'m'+Date.now()+Math.random().toString(36).slice(2,6),name,desc:desc.slice(0,150),xp,active:true});v6save();openV6Teacher('missions');toast('✅ 미션을 등록했어')};
+ if(el.querySelector('#v6export'))el.querySelector('#v6export').onclick=()=>{const data={v6,honors:honorData,world:state,exportedAt:new Date().toISOString()};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='class-village-v6-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000)};
+ });
+}
+
 let fireworks=[];function firework(x,y){for(let i=0;i<48;i++){let a=i*2.399;let speed=35+(i%9)*17;fireworks.push({x,y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed-95,ttl:1.8+Math.random()*.8,life:0,color:['#ffe36e','#ff72ac','#b5fcff','#b6ff9e','#cf96ff'][i%5]})}}
 function fireworksAt(id){let n=id===state.chosen?player:npcs.find(n=>n.id===id);if(n)firework(n.x,n.y-80);firework(745,540);firework(790,495)}
 function drawFireworks(dt){for(let i=fireworks.length-1;i>=0;i--){let p=fireworks[i];p.life+=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=110*dt;if(p.life>=p.ttl){fireworks.splice(i,1);continue}g.save();g.globalAlpha=1-p.life/p.ttl;circle(p.x,p.y,3.5,p.color);g.restore()}}
@@ -152,21 +245,21 @@ function drawTrophy(t){const x=530,y=330;g.save();g.translate(x,y);g.shadowColor
 const npcs=Array.from({length:28},(_,i)=>({id:i+1,x:260+(i*179)%980,y:395+(i*71)%350,tx:0,ty:0,delay:i%3,lv:1+(i*11)%48,style:i%6,step:i*.3,dir:i%2?1:-1}));
 const player={x:740,y:570,step:0,dir:1};
 let view={scale:1,camX:0,camY:0,w:0,h:0,dpr:1},keys=new Set(),last=0,nearby=null,hoverPlace=null,frame=0,showNumbers=true;
-function updateUI(){let p=phaseFor(state.lv),need=maxXp(state.lv),total=state.done.length;$('stageText').textContent=`Lv.${state.lv} · ${p.label}`;$('nameStage').textContent=p.label;$('xpText').textContent=`${state.xp} / ${need} XP`;$('xpFill').style.width=(Math.max(0,Math.min(1,state.xp/need))*100)+'%';$('villageText').textContent=`🏡 마을 Lv.${townStage()} · 공동 XP ${state.townXP}${previewTown?' (미리보기)':''}`;$('stageMapName').textContent=`${['🌱','🌸','🏫','🎪','🏰'][townStage()-1]} Lv.${townStage()} ${townStages[townStage()-1].name}`;$('stagePrev').disabled=townStage()<=1;$('stageNext').disabled=townStage()>=5;$('badgeNow').firstChild.textContent=`⭐ ${state.chosen}번 주민 · `;$('coinText').textContent=`${state.coins} 코인`;$('missionBar').style.width=(total/missionDefs.length*100)+'%';$('missionCount').textContent=`${total} / ${missionDefs.length} 완료`;$('missionLines').innerHTML=missionDefs.map((m,i)=>`<div class="missionLine"><span class="${state.done.includes(i)?'check':'empty'}">${state.done.includes(i)?'☑️':'☐'}</span><span>${m.name}</span></div>`).join('');}
+function updateUI(){let p=phaseFor(state.lv),need=maxXp(state.lv),total=state.done.length;$('stageText').textContent=`Lv.${state.lv} · ${p.label}`;$('nameStage').textContent=p.label;$('xpText').textContent=`${state.xp} / ${need} XP`;$('xpFill').style.width=(Math.max(0,Math.min(1,state.xp/need))*100)+'%';$('villageText').textContent=`🏡 마을 Lv.${townStage()} · 공동 XP ${state.townXP}${previewTown?' (미리보기)':''}`;$('stageMapName').textContent=`${['🌱','🌸','🏫','🎪','🏰'][townStage()-1]} Lv.${townStage()} ${townStages[townStage()-1].name}`;$('stagePrev').disabled=townStage()<=1;$('stageNext').disabled=townStage()>=5;$('badgeNow').firstChild.textContent=`⭐ ${state.chosen}번 주민 · `;$('coinText').textContent=`${state.coins} 코인`;const active=v6.missions.filter(m=>m.active),approved=v6.submissions.filter(s=>s.studentId===state.chosen&&s.status==='approved').length;$('missionBar').style.width=(Math.min(1,active.length?approved/active.length:0)*100)+'%';$('missionCount').textContent=`${approved}개 승인 · ${v6.submissions.filter(s=>s.studentId===state.chosen&&s.status==='pending').length}개 대기`;$('missionLines').innerHTML=active.slice(0,5).map(m=>{const s=v6.submissions.find(s=>s.studentId===state.chosen&&s.missionId===m.id&&s.status!=='rejected');return `<div class="missionLine"><span class="${s?.status==='approved'?'check':'empty'}">${s?.status==='approved'?'☑️':s?.status==='pending'?'⏳':'☐'}</span><span>${escapeText(m.name)}</span></div>`}).join('');}
 function toast(msg){let e=$('toast');e.textContent=msg;e.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('show'),2200)}
 function addXP(n){const oldTown=actualTownStage();state.xp+=n;state.townXP+=n;let leveled=false;while(state.xp>=maxXp(state.lv)&&state.lv<99){state.xp-=maxXp(state.lv);state.lv++;leveled=true;}if(actualTownStage()>oldTown){previewTown=null;villageSparkle=3.2;fireworksAt(state.chosen);announce(`🏡 마을이 Lv.${actualTownStage()}로 성장했어요!`);toast(`🏡 마을 Lv.${actualTownStage()}! ${townStages[actualTownStage()-1].name} 개방!`)}else if(leveled){fireworksAt(state.chosen);announce(`🎉 ${state.chosen}번 학생 Lv.${state.lv}!`);toast(`🎉 레벨 업! Lv.${state.lv} ${phaseFor(state.lv).label}`);sparkle=1.5}else toast(`⭐ ${n} XP 획득!`);save();updateUI()}
 function doneMission(index){if(state.done.includes(index))return toast('이미 완료한 미션이야!');state.done.push(index);state.coins+=35;addXP(missionDefs[index].xp);toast(`✅ ${missionDefs[index].name} 완료! +${missionDefs[index].xp} XP`);openPanel('missions')}
 function closeModal(){$('overlay').classList.remove('open');$('modal').classList.remove('teacherWide');keys.clear()}
 function openModal(title,html,fn){$('modalTitle').textContent=title;$('modalContent').innerHTML=html;$('overlay').classList.add('open');keys.clear();if(fn)fn($('modalContent'))}
 const formatDay=()=>new Intl.DateTimeFormat('ko-KR',{dateStyle:'medium'}).format(new Date());
-function openPanel(id){if(id==='teacherTitles')return openTeacherTitles();if(id==='town'||id==='greenhouse'||id==='observatory'){
+function openPanel(id){if(id==='teacherManage')return openV6Teacher();if(id==='myProfile')return openV6Profile();if(id==='teacherTitles')return openTeacherTitles();if(id==='town'||id==='greenhouse'||id==='observatory'){
  const st=townStage(),next=townNext();
  openModal('🏡 우리 반 마을 발전',`<p class="desc">미션과 공부 기록에서 얻은 경험치가 마을에도 쌓여! 건물·도로·광장·마을 전체 배경이 단계마다 완전히 달라져. <b>미리보기는 실제 XP를 바꾸지 않아.</b></p><div class="choice"><span>🏡 현재 마을 <b>Lv.${actualTownStage()} · ${townStages[actualTownStage()-1].name}</b><br><small>공동 경험치 ${state.townXP} XP ${next?' · 다음 단계 '+next.xp+' XP':' · 최고 단계 달성!'}</small></span><span class="badge">${previewTown?'Lv.'+st+' 체험 중':'실제 진행'}</span></div><div class="meter"><b style="width:${next?Math.min(100,Math.round(state.townXP/next.xp*100)):100}%"></b></div><p class="desc">레벨을 선택하면 배경 전체가 바뀌고, 이동하는 28명은 그대로 유지돼.</p>${townStages.map(t=>`<div class="choice"><span>${['🌱','🌸','🏡','🏮','🌟'][t.level-1]} <b>Lv.${t.level} ${t.name}</b><br><small>${t.desc} · ${t.xp} XP부터</small></span><button class="primary secondary" data-town="${t.level}">${st===t.level?'보는 중':'보기'}</button></div>`).join('')}<button class="primary wide" id="backReal" style="margin-top:10px">✨ 실제 성장 상태로 돌아가기</button><p class="footnote">이 체험판의 진행도는 이 브라우저에서만 저장되고, 다른 학생의 휴대폰과 아직 공유되지 않아.</p>`,el=>{el.querySelectorAll('[data-town]').forEach(b=>b.onclick=()=>{previewTown=Number(b.dataset.town);updateUI();closeModal();villageSparkle=1.7;toast('🌷 마을 Lv.'+previewTown+' 모습으로 바뀌었어!')});el.querySelector('#backReal').onclick=()=>{previewTown=null;updateUI();closeModal();toast('✅ 실제 마을 성장 상태야!')};});return}
  if(id==='village'){closeModal();player.x=740;player.y=570;toast('🏡 마을 광장으로 돌아왔어!');return}
-if(id==='missions'||id==='board'||id==='lab'){openModal('✅ 오늘의 공동 미션',`<p class="desc">가상 미션을 완료하면 내 캐릭터의 경험치와 학급 마을 레벨이 올라가. 실제 서비스에서는 선생님의 승인 절차를 거칠 예정이야.</p>${missionDefs.map((m,i)=>`<div class="choice"><span>${state.done.includes(i)?'✅':'✨'} ${m.name}<br><small>보상 +${m.xp} XP · 코인 35개</small></span><button class="primary" data-m="${i}" ${state.done.includes(i)?'disabled':''}>${state.done.includes(i)?'완료':'체험'}</button></div>`).join('')}<p class="footnote">체험용 가상 기록이며 실제 학생의 미션 데이터는 저장되지 않아.</p>`,el=>el.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>doneMission(Number(b.dataset.m)))));return}
+if(id==='missions'||id==='board'||id==='lab')return openV6Missions();
 if(id==='growth'){openModal('🌱 캐릭터 성장 도감',`<p class="desc">레벨이 오르면 같은 캐릭터의 체형·머리·옷·장신구가 달라져. 아래 버튼을 누르면 해당 성장 단계로 바로 이동해 볼 수 있어.</p><div class="stageCards">${phases.map(p=>`<div class="stageCard"><div class="emoji">${p.icon}</div><b>Lv.${p.lv} ${p.label}</b><br><small>${p.lv===1?'기본 모습':'변신 가능'}</small><br><button class="primary secondary" data-lv="${p.lv}">${state.lv===p.lv?'현재':'변신 보기'}</button></div>`).join('')}</div><p class="footnote">성장 체험은 가상 레벨을 즉시 변경해. 실제 서비스에서는 수행한 미션에 따라 성장하도록 설계할 거야.</p>`,el=>el.querySelectorAll('[data-lv]').forEach(b=>b.addEventListener('click',()=>{state.lv=Number(b.dataset.lv);state.xp=0;save();updateUI();sparkle=2;closeModal();toast(`✨ ${phaseFor(state.lv).label}으로 성장했어!`)})));return}
 if(id==='shop'){openModal('🎁 꾸미기 상점',`<p class="desc">모든 캐릭터는 성별과 상관없이 스타일을 고를 수 있어. 체험판에서는 코인 소모 없이 머리·의상 테마를 바꿀 수 있어.</p><div class="stageCards">${['🌸 벚꽃','🌊 바다','🍀 숲속','🌙 밤하늘','🔥 태양','💜 보라'].map((s,i)=>`<div class="stageCard"><div class="emoji">${s.split(' ')[0]}</div>${s}<br><button class="primary secondary" data-style="${i}">${state.avatar===i?'적용 중':'착용'}</button></div>`).join('')}</div>`,el=>el.querySelectorAll('[data-style]').forEach(b=>b.addEventListener('click',()=>{state.avatar=Number(b.dataset.style);save();closeModal();toast('🎨 새로운 스타일을 적용했어!')})));return}
-if(id==='study'||id==='library'){openModal('📚 나의 공부 기록',`<p class="desc">하루 공부한 시간을 입력하고 XP를 획득해 봐. 기록은 현재 브라우저에만 저장돼.</p><label>오늘 공부한 과목</label><select class="field" id="subject"><option>과학</option><option>국어</option><option>수학</option><option>영어</option><option>사회</option><option>기타</option></select><label>공부한 시간</label><select class="field" id="minutes"><option value="10">10분</option><option value="20">20분</option><option value="30">30분</option><option value="45">45분</option><option value="60">60분</option></select><div style="margin-top:12px"><button class="primary wide" id="saveStudy">공부 기록 저장 (+40 XP)</button></div><p class="desc">최근 기록</p><div class="scrollList">${state.study.length?state.study.slice(-5).reverse().map(s=>`<div class="choice">${escapeText(s.subject)} · ${s.minutes}분 <small>${escapeText(s.day)}</small></div>`).join(''):'<p class="footnote">아직 기록이 없어.</p>'}</div>`,el=>el.querySelector('#saveStudy').onclick=()=>{state.study.push({day:formatDay(),subject:el.querySelector('#subject').value,minutes:Number(el.querySelector('#minutes').value)});addXP(40);openPanel('study')});return}
+if(id==='study'||id==='library')return openV6Study();
 if(id==='checkin'){openModal('📅 오늘의 출석',`<p class="desc">학생이 직접 오늘의 출석 확인을 누르는 기능이야. 실제 출결부를 대체하는 기능은 아니야.</p><div class="choice">🌷 ${formatDay()} <span class="badge">${state.checked?'체험 완료':'미참여'}</span></div><button class="primary wide" id="checkBtn" ${state.checked?'disabled':''}>${state.checked?'오늘의 출석 확인 완료':'오늘 출석 체험 (+30 XP)'}</button>`,el=>el.querySelector('#checkBtn').onclick=()=>{if(state.checked)return;state.checked=true;state.coins+=10;addXP(30);openPanel('checkin')});return}
 if(id==='praise'){openModal('💗 친구 칭찬하기',`<p class="desc">친구에게 따뜻한 칭찬을 남겨 봐. 실제 서비스에서는 교사 승인 후 게시돼. 이 체험판에서는 내 브라우저에만 저장돼.</p><label>칭찬할 친구</label><select id="praiseTo" class="field">${Array.from({length:28},(_,i)=>i+1).filter(n=>n!==state.chosen).map(n=>`<option value="${n}">${n}번 학생</option>`).join('')}</select><label>칭찬 메시지</label><textarea class="field" id="praiseText" rows="3" maxlength="160" placeholder="예: 과학 문제를 친절하게 설명해 줘서 고마워!"></textarea><div style="margin-top:10px"><button class="primary wide" id="praiseSend">칭찬 보내기 (+50 XP, 첫 1회)</button></div><p class="desc">내가 남긴 칭찬</p><div class="scrollList">${state.praise.slice(-5).reverse().map(s=>`<div class="choice"><span>${s.to}번 학생에게<br><small>${escapeText(s.text)}</small></span></div>`).join('')||'<p class="footnote">아직 남긴 칭찬이 없어.</p>'}</div>`,el=>el.querySelector('#praiseSend').onclick=()=>{let str=el.querySelector('#praiseText').value.trim();if(str.length<5)return toast('칭찬을 5글자 이상 입력해 줘!');let first=state.praise.length===0;state.praise.push({from:state.chosen,to:Number(el.querySelector('#praiseTo').value),text:str,day:formatDay()});if(first)addXP(50);save();openPanel('praise');toast('💗 칭찬 메시지가 저장됐어!')});return}
 if(id==='class'||id==='hall'){let members=Array.from({length:28},(_,i)=>`<button class="primary secondary" data-student="${i+1}" style="padding:6px 8px;flex:1;min-width:64px">${i+1}번</button>`).join('');openModal('🧑‍🤝‍🧑 28명 학급 활동',`<p class="desc">학생별 이름 대신 번호만 표시하는 체험판이야. 다른 학생의 개인 공부 기록은 공개하지 않아.</p><div class="row">${members}</div><p class="footnote">학생 번호를 누르면 체험할 캐릭터를 선택할 수 있어. 실제 서비스에는 본인 계정 인증이 필요해.</p>`,el=>el.querySelectorAll('[data-student]').forEach(b=>b.onclick=()=>{state.chosen=Number(b.dataset.student);save();closeModal();toast(`${state.chosen}번 캐릭터를 체험 중이야!`);updatePlayerFromNpc()}));return}
@@ -192,7 +285,7 @@ function previewLevel(level){previewTown=Math.max(1,Math.min(5,level));updateUI(
 $('stagePrev').onclick=()=>previewLevel(townStage()-1);
 $('stageNext').onclick=()=>previewLevel(townStage()+1);
 $('stageReal').onclick=()=>{previewTown=null;updateUI();toast('✅ 실제 마을 성장 단계로 돌아왔어!')};
-$('teacherTitlesBtn').onclick=()=>openPanel('teacherTitles');$('townTop').onclick=()=>openPanel('town');$('growTop').onclick=()=>openPanel('growth');$('helpTop').onclick=()=>openPanel('help');$('helpButton').onclick=()=>openPanel('help');
+$('teacherManageBtn').onclick=()=>openPanel('teacherManage');$('teacherTitlesBtn').onclick=()=>openPanel('teacherTitles');$('townTop').onclick=()=>openPanel('town');$('growTop').onclick=()=>openPanel('growth');$('helpTop').onclick=()=>openPanel('help');$('helpButton').onclick=()=>openPanel('help');
 $('fullTop').onclick=()=>{if(!document.fullscreenElement){$('shell').requestFullscreen?.().catch(()=>toast('전체 화면을 사용할 수 없는 환경이야'))}else document.exitFullscreen?.()};
 const keyMap={arrowup:'up',w:'up',arrowdown:'down',s:'down',arrowleft:'left',a:'left',arrowright:'right',d:'right'};
 addEventListener('keydown',e=>{if(e.key==='Escape')return closeModal();if(document.activeElement?.matches('input,textarea,select'))return;let k=keyMap[e.key.toLowerCase()];if(k){keys.add(k);e.preventDefault()}if(e.code==='Space'&&nearby){e.preventDefault();openPlace(nearby)}});
