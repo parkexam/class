@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
 <meta name="theme-color" content="#302249" />
-<title>우리 반 성장 마을 v4 · 배경이 진화하는 마을</title>
+<title>우리 반 성장 마을 v5 · 칭호와 오라 펫</title>
 <style>
 :root{--gold:#ffd87e;--cream:#fff3d5;--ink:#3b2945;--deep:#261a3e;--sky:#a8eeff;--line:#fbe2a2}
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#23233f;color:#fff;font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;-webkit-tap-highlight-color:transparent}button,select,input,textarea{font:inherit}button{cursor:pointer;touch-action:manipulation}button:disabled{opacity:.55;cursor:not-allowed}
@@ -30,16 +30,24 @@
 #stageSwitcher span{display:block;color:#f3dceb;font-size:10px;white-space:nowrap}
 @media(max-width:750px){#stageSwitcher{top:67px;gap:2px;padding:3px;border-radius:10px}#stageSwitcher button{height:28px;min-width:28px;font-size:12px}#stageSwitcher .stageMiddle{width:115px}#stageSwitcher b{font-size:10px}#stageSwitcher span{font-size:8px}}
 @media(max-height:550px){#stageSwitcher{top:66px;transform:translateX(-50%) scale(.80);transform-origin:top center}}
+
+/* v5 class honor controls */
+#teacherTitlesBtn{background:linear-gradient(150deg,#fff2b2,#dca23e);color:#5d3854;border-color:#fff3b6;box-shadow:0 3px 0 #99612e;font-size:20px}
+#broadcast{position:absolute;z-index:5;bottom:79px;left:50%;transform:translateX(-50%);border:2px solid #fce5a8;background:#2b2948e9;color:#fff2bd;padding:8px 18px;border-radius:12px;font-size:13px;font-weight:850;max-width:min(760px,70vw);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.teacherTable{width:100%;border-collapse:collapse;font-size:12px}.teacherTable th,.teacherTable td{border-bottom:1px solid #e7d5bb;padding:7px 3px;text-align:left}.teacherTable button{padding:5px 8px;font-size:11px}.teacherTable input{width:95px;min-width:55px;padding:6px;border:1px solid #dec39f;border-radius:7px}.teacherTable select{width:70px;padding:5px;border:1px solid #dec39f;border-radius:7px}
+.titlePicks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:10px 0}.titlePicks button{font-size:12px}
+#modal.teacherWide{width:min(750px,100%)}.teacherScroll{max-height:270px;overflow:auto;border:1px solid #e8cfaa;border-radius:10px}
+@media(max-width:750px){#broadcast{bottom:81px;left:9px;transform:none;max-width:calc(100vw - 154px);font-size:10px;padding:6px 8px}#teacherTitlesBtn{font-size:16px}#leftNav .teacherNav{display:none}}
 </style>
 </head>
 <body>
 <div id="shell">
 <canvas id="game" aria-label="우리 반 성장 마을의 움직이는 캐릭터와 건물"></canvas>
 <div id="top">
-  <div class="panel brand"><h1>🌸 우리 반 성장 마을 🏡</h1><p>28명이 함께 키우는 마을 · 로그인 없는 v4 체험판</p></div>
+  <div class="panel brand"><h1>🌸 우리 반 성장 마을 🏡</h1><p>28명이 함께 키우는 마을 · 로그인 없는 v5 체험판</p></div>
   <div class="panel progress"><div class="kicker"><span>👑 <span id="stageText">Lv.1 · 아기</span></span><span class="levelXp" id="xpText">0 / 78 XP</span></div><div class="track"><div id="xpFill" class="fill"></div></div><div class="tiny"><span id="villageText">🏡 마을 Lv.1 · 공동 XP 0</span> · <span id="coinText">0 코인</span></div></div>
   <div class="panel counter">🌱 학급 구성원 <strong>28명</strong></div>
-  <div class="topActions"><button class="roundBtn" title="마을 발전 보기" id="townTop">🏡</button><button class="roundBtn" title="성장 체험" id="growTop">✨</button><button class="roundBtn" title="도움말" id="helpTop">❔</button><button class="roundBtn" title="화면 크게" id="fullTop">⛶</button></div>
+  <div class="topActions"><button class="roundBtn" title="선생님 칭호 수여 (체험용)" id="teacherTitlesBtn">👩🏻‍🏫</button><button class="roundBtn" title="마을 발전 보기" id="townTop">🏡</button><button class="roundBtn" title="성장 체험" id="growTop">✨</button><button class="roundBtn" title="도움말" id="helpTop">❔</button><button class="roundBtn" title="화면 크게" id="fullTop">⛶</button></div>
 </div>
 <div id="leftNav">
   <button class="navBtn active" data-open="village"><i>🏠</i> 마을 홈</button>
@@ -47,11 +55,11 @@
   <button class="navBtn" data-open="class"><i>🧑‍🤝‍🧑</i> 학급 활동</button>
   <button class="navBtn" data-open="town"><i>🌳</i> 마을 발전</button><button class="navBtn" data-open="growth"><i>🌱</i> 캐릭터 성장</button>
   <button class="navBtn" data-open="shop"><i>🎁</i> 꾸미기 상점</button>
-  <button class="navBtn" data-open="study"><i>📚</i> 공부 기록</button>
+  <button class="navBtn" data-open="study"><i>📚</i> 공부 기록</button><button class="navBtn teacherNav" data-open="teacherTitles"><i>👩🏻‍🏫</i> 칭호 수여 (선생님)</button>
 </div>
 <div id="missionPanel"><div class="title">⭐ 오늘의 공동 미션</div><div class="lines" id="missionLines"></div><div class="missionFoot"><div class="progressGreen"><b id="missionBar"></b></div><p id="missionCount">0 / 5 완료</p></div></div>
 <div id="stageSwitcher" aria-label="마을 레벨별 배경 비교"><button id="stagePrev" title="이전 마을 단계" aria-label="이전 단계">◀</button><div class="stageMiddle"><b id="stageMapName">🌱 Lv.1 개척 마을</b><span>배경 전체가 바뀌는 마을</span></div><button id="stageNext" title="다음 마을 단계" aria-label="다음 단계">▶</button><button id="stageReal" title="실제 진행도로 돌아가기" aria-label="실제 진행도로 돌아가기">↺</button></div>
-<div id="badgeNow">⭐ 1번 주민 · <span id="nameStage">아기</span> · 방향키 / 터치로 이동</div>
+<div id="broadcast" aria-live="polite">📣 우리 반 성장 마을에 오신 걸 환영합니다!</div><div id="badgeNow">⭐ 1번 주민 · <span id="nameStage">아기</span> · 방향키 / 터치로 이동</div>
 <div id="bottomBar"><div class="teacherBubble">👩🏻‍🏫 <b>담임선생님의 한마디 💜</b><br>우리 반이 함께 모험하며 성장하는 마을이에요!<div class="smaller">※ 이 화면과 학생 정보는 체험용 가상 데이터입니다.</div></div><div class="actionBar"><button class="quick" data-open="checkin"><span>📅</span>출석</button><button class="quick" data-open="missions"><span>✅</span>미션 인증</button><button class="quick" data-open="praise"><span>💗</span>칭찬하기</button><button class="quick" data-open="growth"><span>✨</span>성장 체험</button></div></div>
 <div id="controlPad"><button class="up" data-dir="up" aria-label="위로">▲</button><button class="left" data-dir="left" aria-label="왼쪽">◀</button><button class="down" data-dir="down" aria-label="아래로">▼</button><button class="right" data-dir="right" aria-label="오른쪽">▶</button></div>
 <button id="helpButton">🎮 이동 방법</button><div id="toast" role="status"></div>
@@ -101,17 +109,57 @@ const actualTownStage=()=>[...townStages].reverse().find(t=>state.townXP>=t.xp)?
 const townStage=()=>previewTown||actualTownStage();
 const townNext=()=>townStages.find(t=>t.xp>state.townXP); 
 const save=()=>{try{localStorage.setItem('class_village_v2_preview',JSON.stringify(state))}catch{}};
+
+// v5: teacher-awarded titles and student levels are saved only in this browser.
+const honorKey='class_village_v5_honors';
+let honorData=safeParse(honorKey,{titles:{},levels:{},growth:{},logs:[]});
+for(const key of ['titles','levels','growth'])if(!honorData[key]||typeof honorData[key]!=='object'||Array.isArray(honorData[key]))honorData[key]={};
+if(!Array.isArray(honorData.logs))honorData.logs=[];
+function saveHonors(){try{localStorage.setItem(honorKey,JSON.stringify(honorData))}catch{toast('저장 공간 부족: 기록 저장 실패')}}
+const honorOptions=['📚 독서왕','🧪 과학탐구대장','🌱 성실모범','🤝 협동지킴이','✨ 친절왕','💡 아이디어뱅크','🎨 창의예술가','🏃 건강챔피언'];
+function studentLevel(id){return id===state.chosen?state.lv:(honorData.levels[id]??(npcs.find(n=>n.id===id)?.lv||1))}
+function announce(text){const e=$('broadcast');if(e)e.textContent='📣 '+text}
+function setHonor(id,title){id=Number(id);if(id<1||id>28)return;title=String(title||'').trim().slice(0,22);if(title)honorData.titles[id]=title;else delete honorData.titles[id];saveHonors();announce(title?`${id}번 학생에게 「${title}」 칭호 수여!`:`${id}번 학생 칭호 회수`);toast('칭호 현황이 저장되었어!')}
+function setStudentLevel(id,value){id=Number(id);const lv=Math.max(1,Math.min(99,Math.round(Number(value)||1)));let previous=studentLevel(id);if(id===state.chosen){state.lv=lv;state.xp=0;save()}else honorData.levels[id]=lv;
+ const delta=Math.max(0,lv-previous);if(delta){const wk=new Date().toISOString().slice(0,10);honorData.logs.push({id,delta,date:wk});honorData.logs=honorData.logs.slice(-200);fireworksAt(id);announce(`🎉 ${id}번 학생 Lv.${lv}! ${phaseFor(lv).label} 단계 성장!`)}
+ saveHonors();updateUI()}
+function renderTeacherPanel(){const id=Number($('honorStudent')?.value||1);$('honorPresets').innerHTML=honorOptions.map(t=>`<button type="button" class="primary secondary" data-title="${escapeText(t)}">${escapeText(t)}</button>`).join('');
+ $('honorPresets').querySelectorAll('[data-title]').forEach(b=>b.onclick=()=>{setHonor(id,b.dataset.title);renderTeacherPanel()});
+ $('honorCustom').value=honorData.titles[id]||'';
+ $('honorLevel').value=studentLevel(id);
+ $('teacherStatus').textContent=`${id}번: ${honorData.titles[id]||'칭호 없음'} · Lv.${studentLevel(id)}`;
+ $('honorRows').innerHTML=Array.from({length:28},(_,i)=>{let n=i+1,t=honorData.titles[n]||'';return `<tr><td><b>${n}번</b></td><td><input maxlength="22" aria-label="${n}번 칭호" data-edit-title="${n}" value="${escapeText(t)}"></td><td>Lv.${studentLevel(n)}</td><td><button class="primary" data-save-title="${n}">저장</button> <button class="primary secondary" data-delete-title="${n}">삭제</button></td></tr>`}).join('');
+ $('honorRows').querySelectorAll('[data-save-title]').forEach(b=>b.onclick=()=>{const n=Number(b.dataset.saveTitle);setHonor(n,$('honorRows').querySelector(`[data-edit-title="${n}"]`).value);renderTeacherPanel()});
+ $('honorRows').querySelectorAll('[data-delete-title]').forEach(b=>b.onclick=()=>{setHonor(Number(b.dataset.deleteTitle),'');renderTeacherPanel()});}
+function openTeacherTitles(){openModal('👩🏻‍🏫 선생님 전용 칭호 수여',`<p class="desc">선생님이 학생별 칭호와 레벨을 직접 관리하는 <b>로그인 없는 체험 모드</b>야. 실제 서비스에서는 선생님 계정에만 이 화면이 보이도록 Firebase 보안을 설정할 예정이야.</p>
+ <label>학생 선택</label><select class="field" id="honorStudent">${Array.from({length:28},(_,i)=>`<option value="${i+1}">${i+1}번 학생</option>`).join('')}</select>
+ <p id="teacherStatus" class="desc"></p><label>추천 칭호 원클릭 수여</label><div id="honorPresets" class="titlePicks"></div>
+ <label>직접 칭호 입력 (22자 이내)</label><input class="field" id="honorCustom" maxlength="22" placeholder="예: 우리 반 발명왕"><div class="row" style="margin-top:8px"><button class="primary" id="honorSubmit">🏅 칭호 수여 / 수정</button><button class="primary secondary" id="honorRemove">칭호 삭제</button></div>
+ <div class="choice" style="margin-top:15px;display:block"><label>선택 학생 레벨 조정 (오라·펫 변화 체험)</label><div class="row"><input id="honorLevel" type="number" min="1" max="99" class="field" style="width:90px"><button class="primary" id="honorSetLevel">레벨 적용</button>${[10,20,35,50].map(v=>`<button class="primary secondary" data-jump="${v}">Lv.${v}</button>`).join('')}</div></div>
+ <h3 style="margin:17px 0 7px">📋 28명 칭호 현황</h3><div class="teacherScroll"><table class="teacherTable"><thead><tr><th>학생</th><th>칭호</th><th>레벨</th><th>관리</th></tr></thead><tbody id="honorRows"></tbody></table></div><p class="footnote">현재 기기의 브라우저에만 저장되며 시크릿 모드·브라우저 데이터 삭제 시 사라질 수 있어.</p>`,el=>{
+ $('modal').classList.add('teacherWide');$('honorStudent').value=String(state.chosen);renderTeacherPanel();$('honorStudent').onchange=renderTeacherPanel;
+ $('honorSubmit').onclick=()=>{setHonor($('honorStudent').value,$('honorCustom').value);renderTeacherPanel()};$('honorRemove').onclick=()=>{setHonor($('honorStudent').value,'');renderTeacherPanel()};
+ $('honorSetLevel').onclick=()=>{setStudentLevel($('honorStudent').value,$('honorLevel').value);renderTeacherPanel()};el.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>{setStudentLevel($('honorStudent').value,b.dataset.jump);renderTeacherPanel()});
+ });}
+let fireworks=[];function firework(x,y){for(let i=0;i<48;i++){let a=i*2.399;let speed=35+(i%9)*17;fireworks.push({x,y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed-95,ttl:1.8+Math.random()*.8,life:0,color:['#ffe36e','#ff72ac','#b5fcff','#b6ff9e','#cf96ff'][i%5]})}}
+function fireworksAt(id){let n=id===state.chosen?player:npcs.find(n=>n.id===id);if(n)firework(n.x,n.y-80);firework(745,540);firework(790,495)}
+function drawFireworks(dt){for(let i=fireworks.length-1;i>=0;i--){let p=fireworks[i];p.life+=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=110*dt;if(p.life>=p.ttl){fireworks.splice(i,1);continue}g.save();g.globalAlpha=1-p.life/p.ttl;circle(p.x,p.y,3.5,p.color);g.restore()}}
+function drawAura(x,y,lv,t){if(lv<10)return;let color=lv>=50?'#ffe876':lv>=35?'#ff5e8b':lv>=20?'#a979ff':'#59e5d0';g.save();g.translate(x,y);g.strokeStyle=color;g.shadowColor=color;g.shadowBlur=14;g.lineWidth=lv>=35?3.5:2.5;g.beginPath();g.ellipse(0,0,lv>=35?29:25,lv>=35?13:11,0,0,Math.PI*2);g.stroke();for(let i=0;i<(lv>=50?8:lv>=20?6:3);i++){let a=t/1300+i*Math.PI*2/(lv>=50?8:lv>=20?6:3);let rx=Math.cos(a)*28,ry=Math.sin(a)*12;drawText(lv>=50?'✦':lv>=35?'♦':lv>=20?'✧':'•',rx,ry,lv>=50?13:10,color,'#492f61')}g.restore()}
+function drawPet(n,lv,t){const x=n.x-30*(n.dir||1),y=n.y-5+Math.sin(t/370+n.id)*5;g.save();g.globalAlpha=.96;g.shadowColor='#ffffffa3';g.shadowBlur=6;let emoji=lv>=50?'🐲':lv>=35?'🦉':lv>=20?'🐣':'🌱';drawText(emoji,x,y-17,lv>=50?26:21,'#fff','#49324e');if((Math.floor(t/2100+n.id)%17===0))drawText('❤️',x+13,y-40,13,'#fff','#9e517b');g.restore()}
+function drawTitle(n,x,y,lv,t){const title=honorData.titles[n.id];if(!title)return;g.save();let yy=y-111-Math.sin(t/460+n.id)*3;g.font='bold 12px system-ui';const w=Math.min(202,Math.max(82,g.measureText(title).width+34));g.shadowColor='#ffd05e';g.shadowBlur=11;rr(x-w/2,yy-12,w,25,13,'#65416beF');g.shadowBlur=0;g.lineWidth=2;g.strokeStyle='#ffe18c';g.strokeRect(x-w/2+5,yy-10,w-10,21);drawText('✦ '+title,x,yy,12,'#fff3a9','#6b3c63');g.restore()}
+function drawTrophy(t){const x=530,y=330;g.save();g.translate(x,y);g.shadowColor='#ffe46c';g.shadowBlur=9;drawText('🏆',0,0,31,'#fff','#63456a');g.shadowBlur=0;const start=Date.now()-7*86400000;let scores={};for(const e of honorData.logs){if(Date.parse(e.date)>=start)scores[e.id]=(scores[e.id]||0)+e.delta}let winner=Object.entries(scores).sort((a,b)=>b[1]-a[1])[0];drawText(winner?`이번 주 성장왕 ${winner[0]}번`:'이주의 성장왕',0,25,12,'#ffeeb1','#5d4058');g.restore()}
+
 const npcs=Array.from({length:28},(_,i)=>({id:i+1,x:260+(i*179)%980,y:395+(i*71)%350,tx:0,ty:0,delay:i%3,lv:1+(i*11)%48,style:i%6,step:i*.3,dir:i%2?1:-1}));
 const player={x:740,y:570,step:0,dir:1};
 let view={scale:1,camX:0,camY:0,w:0,h:0,dpr:1},keys=new Set(),last=0,nearby=null,hoverPlace=null,frame=0,showNumbers=true;
 function updateUI(){let p=phaseFor(state.lv),need=maxXp(state.lv),total=state.done.length;$('stageText').textContent=`Lv.${state.lv} · ${p.label}`;$('nameStage').textContent=p.label;$('xpText').textContent=`${state.xp} / ${need} XP`;$('xpFill').style.width=(Math.max(0,Math.min(1,state.xp/need))*100)+'%';$('villageText').textContent=`🏡 마을 Lv.${townStage()} · 공동 XP ${state.townXP}${previewTown?' (미리보기)':''}`;$('stageMapName').textContent=`${['🌱','🌸','🏫','🎪','🏰'][townStage()-1]} Lv.${townStage()} ${townStages[townStage()-1].name}`;$('stagePrev').disabled=townStage()<=1;$('stageNext').disabled=townStage()>=5;$('badgeNow').firstChild.textContent=`⭐ ${state.chosen}번 주민 · `;$('coinText').textContent=`${state.coins} 코인`;$('missionBar').style.width=(total/missionDefs.length*100)+'%';$('missionCount').textContent=`${total} / ${missionDefs.length} 완료`;$('missionLines').innerHTML=missionDefs.map((m,i)=>`<div class="missionLine"><span class="${state.done.includes(i)?'check':'empty'}">${state.done.includes(i)?'☑️':'☐'}</span><span>${m.name}</span></div>`).join('');}
 function toast(msg){let e=$('toast');e.textContent=msg;e.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('show'),2200)}
-function addXP(n){const oldTown=actualTownStage();state.xp+=n;state.townXP+=n;let leveled=false;while(state.xp>=maxXp(state.lv)&&state.lv<99){state.xp-=maxXp(state.lv);state.lv++;leveled=true;}if(actualTownStage()>oldTown){previewTown=null;villageSparkle=3.2;toast(`🏡 마을 Lv.${actualTownStage()}! ${townStages[actualTownStage()-1].name} 개방!`)}else if(leveled){toast(`🎉 레벨 업! Lv.${state.lv} ${phaseFor(state.lv).label}`);sparkle=1.5}else toast(`⭐ ${n} XP 획득!`);save();updateUI()}
+function addXP(n){const oldTown=actualTownStage();state.xp+=n;state.townXP+=n;let leveled=false;while(state.xp>=maxXp(state.lv)&&state.lv<99){state.xp-=maxXp(state.lv);state.lv++;leveled=true;}if(actualTownStage()>oldTown){previewTown=null;villageSparkle=3.2;fireworksAt(state.chosen);announce(`🏡 마을이 Lv.${actualTownStage()}로 성장했어요!`);toast(`🏡 마을 Lv.${actualTownStage()}! ${townStages[actualTownStage()-1].name} 개방!`)}else if(leveled){fireworksAt(state.chosen);announce(`🎉 ${state.chosen}번 학생 Lv.${state.lv}!`);toast(`🎉 레벨 업! Lv.${state.lv} ${phaseFor(state.lv).label}`);sparkle=1.5}else toast(`⭐ ${n} XP 획득!`);save();updateUI()}
 function doneMission(index){if(state.done.includes(index))return toast('이미 완료한 미션이야!');state.done.push(index);state.coins+=35;addXP(missionDefs[index].xp);toast(`✅ ${missionDefs[index].name} 완료! +${missionDefs[index].xp} XP`);openPanel('missions')}
-function closeModal(){$('overlay').classList.remove('open');keys.clear()}
+function closeModal(){$('overlay').classList.remove('open');$('modal').classList.remove('teacherWide');keys.clear()}
 function openModal(title,html,fn){$('modalTitle').textContent=title;$('modalContent').innerHTML=html;$('overlay').classList.add('open');keys.clear();if(fn)fn($('modalContent'))}
 const formatDay=()=>new Intl.DateTimeFormat('ko-KR',{dateStyle:'medium'}).format(new Date());
-function openPanel(id){if(id==='town'||id==='greenhouse'||id==='observatory'){
+function openPanel(id){if(id==='teacherTitles')return openTeacherTitles();if(id==='town'||id==='greenhouse'||id==='observatory'){
  const st=townStage(),next=townNext();
  openModal('🏡 우리 반 마을 발전',`<p class="desc">미션과 공부 기록에서 얻은 경험치가 마을에도 쌓여! 건물·도로·광장·마을 전체 배경이 단계마다 완전히 달라져. <b>미리보기는 실제 XP를 바꾸지 않아.</b></p><div class="choice"><span>🏡 현재 마을 <b>Lv.${actualTownStage()} · ${townStages[actualTownStage()-1].name}</b><br><small>공동 경험치 ${state.townXP} XP ${next?' · 다음 단계 '+next.xp+' XP':' · 최고 단계 달성!'}</small></span><span class="badge">${previewTown?'Lv.'+st+' 체험 중':'실제 진행'}</span></div><div class="meter"><b style="width:${next?Math.min(100,Math.round(state.townXP/next.xp*100)):100}%"></b></div><p class="desc">레벨을 선택하면 배경 전체가 바뀌고, 이동하는 28명은 그대로 유지돼.</p>${townStages.map(t=>`<div class="choice"><span>${['🌱','🌸','🏡','🏮','🌟'][t.level-1]} <b>Lv.${t.level} ${t.name}</b><br><small>${t.desc} · ${t.xp} XP부터</small></span><button class="primary secondary" data-town="${t.level}">${st===t.level?'보는 중':'보기'}</button></div>`).join('')}<button class="primary wide" id="backReal" style="margin-top:10px">✨ 실제 성장 상태로 돌아가기</button><p class="footnote">이 체험판의 진행도는 이 브라우저에서만 저장되고, 다른 학생의 휴대폰과 아직 공유되지 않아.</p>`,el=>{el.querySelectorAll('[data-town]').forEach(b=>b.onclick=()=>{previewTown=Number(b.dataset.town);updateUI();closeModal();villageSparkle=1.7;toast('🌷 마을 Lv.'+previewTown+' 모습으로 바뀌었어!')});el.querySelector('#backReal').onclick=()=>{previewTown=null;updateUI();closeModal();toast('✅ 실제 마을 성장 상태야!')};});return}
  if(id==='village'){closeModal();player.x=740;player.y=570;toast('🏡 마을 광장으로 돌아왔어!');return}
@@ -144,7 +192,7 @@ function previewLevel(level){previewTown=Math.max(1,Math.min(5,level));updateUI(
 $('stagePrev').onclick=()=>previewLevel(townStage()-1);
 $('stageNext').onclick=()=>previewLevel(townStage()+1);
 $('stageReal').onclick=()=>{previewTown=null;updateUI();toast('✅ 실제 마을 성장 단계로 돌아왔어!')};
-$('townTop').onclick=()=>openPanel('town');$('growTop').onclick=()=>openPanel('growth');$('helpTop').onclick=()=>openPanel('help');$('helpButton').onclick=()=>openPanel('help');
+$('teacherTitlesBtn').onclick=()=>openPanel('teacherTitles');$('townTop').onclick=()=>openPanel('town');$('growTop').onclick=()=>openPanel('growth');$('helpTop').onclick=()=>openPanel('help');$('helpButton').onclick=()=>openPanel('help');
 $('fullTop').onclick=()=>{if(!document.fullscreenElement){$('shell').requestFullscreen?.().catch(()=>toast('전체 화면을 사용할 수 없는 환경이야'))}else document.exitFullscreen?.()};
 const keyMap={arrowup:'up',w:'up',arrowdown:'down',s:'down',arrowleft:'left',a:'left',arrowright:'right',d:'right'};
 addEventListener('keydown',e=>{if(e.key==='Escape')return closeModal();if(document.activeElement?.matches('input,textarea,select'))return;let k=keyMap[e.key.toLowerCase()];if(k){keys.add(k);e.preventDefault()}if(e.code==='Space'&&nearby){e.preventDefault();openPlace(nearby)}});
@@ -292,7 +340,7 @@ function drawScene(t,dt){let w=view.w,h=view.h,sc=view.scale;
  currentBackground(t)
  // Animated light and subtle sparkle on the town, not a static mockup
  for(let i=0;i<27;i++){let x=70+(i*157)%1380,y=280+(i*111)%480;let a=Math.sin(t/850+i*1.5)*.3+.5;g.globalAlpha=a;circle(x,y,1.8+(i%3),i%2?'#fff9b2':'#ffe2ec')}g.globalAlpha=1;
- let actors=npcs.filter(n=>n.id!==state.chosen).map(n=>({p:n,player:false}));actors.push({p:{...player,step:player.step,lv:state.lv,style:state.avatar,id:state.chosen},player:true});actors.sort((a,b)=>a.p.y-b.p.y);for(let a of actors)drawPerson(a.p,a.player,t/1000);
+ let actors=npcs.filter(n=>n.id!==state.chosen).map(n=>({p:n,player:false}));actors.push({p:{...player,step:player.step,lv:state.lv,style:state.avatar,id:state.chosen},player:true});actors.sort((a,b)=>a.p.y-b.p.y);for(let a of actors){const obj=a.p;obj.id=a.player?state.chosen:obj.id;const lv=a.player?state.lv:studentLevel(obj.id);if(!a.player)obj.lv=lv;drawAura(obj.x,obj.y,lv,t);drawPet(obj,lv,t);drawPerson(obj,a.player,t/1000);drawTitle(obj,obj.x,obj.y,lv,t)}drawTrophy(t);drawFireworks(dt);
  if(nearby){let cx=player.x,cy=player.y-100;rr(cx-100,cy-14,200,29,10,'#332343dc');drawText(`스페이스: ${nearby.name}`,cx,cy,12,'#ffe8a5')}
  g.restore();}
 function tick(t){let dt=Math.min((t-last)/1000||.016,.05);last=t;frame++;
