@@ -67,28 +67,59 @@
   const taskKey = (id, day) =>
     `classroom-study-tasks-v1-${id}-${day}`;
 
-  function loadGoal(id) {
-    let value = 60;
 
-    try {
-      value = Number(localStorage.getItem(goalKey(id))) || 60;
-    } catch {}
+function loadGoal(id) {
+  try {
+    const saved = localStorage.getItem(goalKey(id));
+
+    // 아직 목표를 정하지 않은 학생은 0분
+    if (saved === null) return 0;
+
+    const value = Number(saved);
 
     return Number.isInteger(value) &&
            value >= 10 &&
            value <= 600
       ? value
-      : 60;
+      : 0;
+  } catch {
+    return 0;
   }
+}
 
-  function saveGoal(id, value) {
-    try {
-      localStorage.setItem(goalKey(id), String(value));
-      return true;
-    } catch {
-      return false;
-    }
+function saveGoal(id, value) {
+  try {
+    localStorage.setItem(goalKey(id), String(value));
+    return true;
+  } catch {
+    return false;
   }
+}
+
+// 학생별 자유 목표 내용
+const goalTitleKey = id =>
+  `classroom-study-goal-title-v1-${id}`;
+
+function loadGoalTitle(id) {
+  try {
+    return localStorage.getItem(goalTitleKey(id)) || '';
+  } catch {
+    return '';
+  }
+}
+
+function saveGoalTitle(id, title) {
+  try {
+    localStorage.setItem(
+      goalTitleKey(id),
+      String(title).trim().slice(0,80)
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 
   function loadTasks(id, day) {
     try {
