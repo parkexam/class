@@ -1268,3 +1268,769 @@ el.querySelector('#spGoalSave').onclick = () => {
   console.info('[우리 반 학습 플래너] 준비 완료');
 
 })();
+
+
+/* ==================================================
+   우리 반 성장 마을 - 프리미엄 학습 플래너 테마
+   parkexam.github.io/exam 디자인 적용
+   기존 Firebase 및 학습 기능 유지
+================================================== */
+
+;(() => {
+  'use strict';
+
+  const styleId = 'classroomPremiumPlanner';
+
+  // 중복 적용 방지
+  if (document.getElementById(styleId)) return;
+
+  const style = document.createElement('style');
+  style.id = styleId;
+
+  style.textContent = `
+
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+
+  /* =====================================
+     프리미엄 컬러 시스템
+  ===================================== */
+
+  #studyPlanner {
+    --pp-navy: #0f172a;
+    --pp-blue: #2563eb;
+    --pp-blue-light: #eff6ff;
+    --pp-green: #10b981;
+    --pp-text: #0f172a;
+    --pp-muted: #64748b;
+    --pp-border: #e2e8f0;
+    --pp-bg: #f8fafc;
+
+    font-family:
+      'Pretendard Variable',
+      Pretendard,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Apple SD Gothic Neo',
+      sans-serif !important;
+
+    font-size: 14px !important;
+    letter-spacing: -0.025em;
+    line-height: 1.6;
+    color: var(--pp-text) !important;
+    padding: 4px 0 15px;
+  }
+
+  #studyPlanner * {
+    box-sizing: border-box;
+  }
+
+  /* =====================================
+     학습 플래너 팝업 전체
+     기존 게임 UI와 구분
+  ===================================== */
+
+  #modal:has(#studyPlanner) {
+    width: min(1000px, calc(100vw - 24px)) !important;
+    max-height: 94dvh !important;
+
+    background: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+
+    border-radius: 20px !important;
+    padding: 28px !important;
+
+    color: #0f172a !important;
+
+    box-shadow:
+      0 25px 70px rgba(15,23,42,.35),
+      0 4px 15px rgba(15,23,42,.08) !important;
+
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  #modal:has(#studyPlanner) > h2 {
+    font-family: Pretendard, sans-serif !important;
+    font-size: 21px !important;
+    font-weight: 800 !important;
+    color: #0f172a !important;
+    letter-spacing: -0.04em;
+    margin: 0 50px 18px 0 !important;
+  }
+
+  #modal:has(#studyPlanner) > .close {
+    background: white !important;
+    color: #475569 !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 11px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    font-size: 19px !important;
+    font-weight: 600 !important;
+    width: 36px;
+    height: 36px;
+  }
+
+  #modal:has(#studyPlanner) > .close:hover {
+    color: #0f172a !important;
+    background: #f1f5f9 !important;
+  }
+
+  /* =====================================
+     상단 네이비 히어로
+  ===================================== */
+
+  #studyPlanner .sp-hero {
+    background:
+      radial-gradient(
+        circle at 95% 12%,
+        rgba(59,130,246,.23),
+        transparent 38%
+      ),
+      linear-gradient(
+        125deg,
+        #0f172a 0%,
+        #172554 60%,
+        #1e3a8a 100%
+      ) !important;
+
+    border: 1px solid rgba(255,255,255,.1) !important;
+    border-radius: 18px !important;
+
+    padding: 27px 30px !important;
+    margin-bottom: 25px !important;
+
+    box-shadow:
+      0 12px 24px -6px rgba(15,23,42,.24) !important;
+
+    color: #ffffff !important;
+  }
+
+  #studyPlanner .sp-hero strong {
+    font-size: clamp(20px,3vw,27px) !important;
+    line-height: 1.35 !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.04em;
+    color: white !important;
+    margin: 7px 0 9px !important;
+  }
+
+  #studyPlanner .sp-hero small {
+    color: #bfdbfe !important;
+    font-size: 12px !important;
+    font-weight: 500;
+  }
+
+  #studyPlanner .sp-hero-icon {
+    width: 76px;
+    height: 76px;
+    flex-shrink: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-size: 40px !important;
+
+    border-radius: 20px;
+    background: rgba(255,255,255,.09);
+    border: 1px solid rgba(255,255,255,.13);
+  }
+
+  /* =====================================
+     제목 스타일
+  ===================================== */
+
+  #studyPlanner .sp-section-title {
+    font-size: 16px !important;
+    font-weight: 800 !important;
+    color: #0f172a !important;
+
+    margin: 24px 0 12px !important;
+    letter-spacing: -0.035em;
+  }
+
+  #studyPlanner .sp-section-title:first-child {
+    margin-top: 0 !important;
+  }
+
+  #studyPlanner .sp-small,
+  #studyPlanner .sp-note {
+    color: #64748b !important;
+    font-size: 12px !important;
+    font-weight: 500;
+  }
+
+  /* =====================================
+     D-DAY 카드
+  ===================================== */
+
+  #studyPlanner .sp-ddays {
+    display: grid !important;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 12px !important;
+  }
+
+  #studyPlanner .sp-day-card {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 16px !important;
+
+    padding: 19px !important;
+    position: relative;
+    overflow: hidden;
+
+    box-shadow:
+      0 1px 3px rgba(15,23,42,.04) !important;
+
+    transition:
+      transform .2s ease,
+      box-shadow .2s ease;
+  }
+
+  #studyPlanner .sp-day-card:hover {
+    transform: translateY(-2px);
+
+    box-shadow:
+      0 8px 20px rgba(15,23,42,.08) !important;
+  }
+
+  #studyPlanner .sp-day-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: #2563eb;
+  }
+
+  #studyPlanner .sp-day-card:nth-child(2)::before {
+    background: #10b981;
+  }
+
+  #studyPlanner .sp-day-card:nth-child(3)::before {
+    background: #f59e0b;
+  }
+
+  #studyPlanner .sp-day-name {
+    color: #334155 !important;
+    font-size: 13px !important;
+    font-weight: 750 !important;
+  }
+
+  #studyPlanner .sp-day-date {
+    color: #94a3b8 !important;
+    font-size: 12px !important;
+    margin: 7px 0 !important;
+  }
+
+  #studyPlanner .sp-day-count {
+    color: #2563eb !important;
+    font-size: clamp(22px,3vw,30px) !important;
+    font-weight: 850 !important;
+
+    letter-spacing: -0.05em;
+    margin-top: 8px !important;
+  }
+
+  #studyPlanner .sp-day-card:nth-child(2)
+  .sp-day-count {
+    color: #059669 !important;
+  }
+
+  #studyPlanner .sp-day-card:nth-child(3)
+  .sp-day-count {
+    color: #d97706 !important;
+  }
+
+  #studyPlanner .sp-day-card.sp-past {
+    opacity: .7;
+  }
+
+  /* =====================================
+     일반 통계 카드
+  ===================================== */
+
+  #studyPlanner .sp-two {
+    display: grid !important;
+    grid-template-columns:
+      repeat(2,minmax(0,1fr)) !important;
+    gap: 16px !important;
+  }
+
+  #studyPlanner .sp-card {
+    background: #ffffff !important;
+    color: #0f172a !important;
+
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 16px !important;
+
+    padding: 22px !important;
+
+    box-shadow:
+      0 1px 3px rgba(15,23,42,.04) !important;
+
+    transition:
+      border-color .2s ease,
+      box-shadow .2s ease;
+  }
+
+  #studyPlanner .sp-card:hover {
+    border-color: #cbd5e1 !important;
+
+    box-shadow:
+      0 5px 15px rgba(15,23,42,.05) !important;
+  }
+
+  #studyPlanner .sp-kpi {
+    color: #0f172a !important;
+
+    font-size: 34px !important;
+    font-weight: 850 !important;
+
+    line-height: 1.25 !important;
+    letter-spacing: -0.05em;
+    margin: 12px 0 !important;
+  }
+
+  #studyPlanner .sp-kpi span {
+    font-size: 15px !important;
+    color: #64748b !important;
+    font-weight: 550 !important;
+  }
+
+  #studyPlanner .sp-kpi > span:first-child {
+    font-size: inherit !important;
+    color: #0f172a !important;
+    font-weight: inherit !important;
+  }
+
+  #studyPlanner .sp-row {
+    color: #334155 !important;
+    font-size: 13px;
+  }
+
+  #studyPlanner .sp-row strong {
+    color: #2563eb !important;
+    font-weight: 800 !important;
+  }
+
+  /* =====================================
+     파란색 목표 달성률 게이지
+  ===================================== */
+
+  #studyPlanner .sp-track {
+    height: 10px !important;
+    background: #e2e8f0 !important;
+    border-radius: 999px !important;
+    overflow: hidden;
+  }
+
+  #studyPlanner .sp-fill {
+    background:
+      linear-gradient(
+        90deg,
+        #2563eb,
+        #60a5fa
+      ) !important;
+
+    height: 100% !important;
+    border-radius: 999px !important;
+    transition: width .4s ease !important;
+  }
+
+  #studyPlanner #spTaskFill {
+    background:
+      linear-gradient(
+        90deg,
+        #059669,
+        #34d399
+      ) !important;
+  }
+
+  /* =====================================
+     최근 7일 공부량 그래프
+  ===================================== */
+
+  #studyPlanner .sp-bar-chart {
+    height: 148px !important;
+    padding-top: 18px !important;
+    gap: 9px !important;
+  }
+
+  #studyPlanner .sp-bar-holder {
+    height: 98px !important;
+    max-width: 40px !important;
+    background: #eff6ff !important;
+    border-radius: 7px 7px 3px 3px !important;
+  }
+
+  #studyPlanner .sp-bar {
+    background:
+      linear-gradient(
+        180deg,
+        #60a5fa,
+        #2563eb
+      ) !important;
+
+    border-radius: 6px 6px 0 0 !important;
+    min-height: 2px;
+  }
+
+  #studyPlanner .sp-bar-col.today .sp-bar {
+    background:
+      linear-gradient(
+        180deg,
+        #34d399,
+        #059669
+      ) !important;
+  }
+
+  #studyPlanner .sp-bar-label {
+    font-size: 11px !important;
+    font-weight: 600;
+    color: #64748b !important;
+  }
+
+  /* =====================================
+     학생 목표 입력 영역
+  ===================================== */
+
+  #studyPlanner label {
+    color: #475569 !important;
+    font-weight: 650 !important;
+  }
+
+  #studyPlanner input:not([type="checkbox"]),
+  #studyPlanner select {
+    font-family: inherit !important;
+    font-size: 13px !important;
+
+    background: #ffffff !important;
+    color: #0f172a !important;
+
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 10px !important;
+
+    padding: 11px 13px !important;
+    min-height: 42px;
+
+    box-shadow:
+      0 1px 2px rgba(15,23,42,.025);
+
+    transition:
+      border-color .15s,
+      box-shadow .15s;
+  }
+
+  #studyPlanner input:focus,
+  #studyPlanner select:focus {
+    border-color: #2563eb !important;
+    outline: none !important;
+
+    box-shadow:
+      0 0 0 3px rgba(37,99,235,.13) !important;
+  }
+
+  #studyPlanner input::placeholder {
+    color: #94a3b8 !important;
+  }
+
+  /* =====================================
+     버튼 디자인
+  ===================================== */
+
+  #studyPlanner button {
+    font-family: inherit !important;
+
+    background: #2563eb !important;
+    border: 1px solid #2563eb !important;
+
+    color: white !important;
+
+    border-radius: 10px !important;
+    padding: 11px 15px !important;
+
+    font-size: 13px !important;
+    font-weight: 700 !important;
+
+    box-shadow:
+      0 2px 5px rgba(37,99,235,.12) !important;
+
+    transition:
+      background .2s,
+      transform .2s,
+      box-shadow .2s;
+  }
+
+  #studyPlanner button:hover {
+    background: #1d4ed8 !important;
+
+    transform: translateY(-1px);
+
+    box-shadow:
+      0 5px 12px rgba(37,99,235,.22) !important;
+  }
+
+  #studyPlanner button:active {
+    transform: scale(.98);
+  }
+
+  #studyPlanner #spSave {
+    background: #0f172a !important;
+    border-color: #0f172a !important;
+    padding: 13px !important;
+  }
+
+  #studyPlanner #spSave:hover {
+    background: #1e293b !important;
+  }
+
+  /* =====================================
+     체크리스트
+  ===================================== */
+
+  #studyPlanner .sp-task {
+    border-bottom:
+      1px solid #f1f5f9 !important;
+    padding: 12px 2px !important;
+  }
+
+  #studyPlanner .sp-task label {
+    color: #334155 !important;
+    font-size: 13px;
+    font-weight: 550 !important;
+  }
+
+  #studyPlanner .sp-task input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+
+    accent-color: #2563eb !important;
+    cursor: pointer;
+  }
+
+  #studyPlanner .sp-task.done label span {
+    color: #94a3b8 !important;
+  }
+
+  #studyPlanner .sp-task button {
+    background: #f1f5f9 !important;
+    color: #64748b !important;
+    border: 1px solid #e2e8f0 !important;
+    padding: 5px 10px !important;
+    box-shadow: none !important;
+  }
+
+  #studyPlanner .sp-task button:hover {
+    background: #fee2e2 !important;
+    color: #dc2626 !important;
+    border-color: #fecaca !important;
+  }
+
+  /* =====================================
+     과목별 공부 통계
+  ===================================== */
+
+  #studyPlanner .sp-subject {
+    margin: 13px 0 !important;
+  }
+
+  #studyPlanner .sp-subject-line {
+    color: #475569 !important;
+    font-size: 13px !important;
+    font-weight: 550;
+    margin-bottom: 7px !important;
+  }
+
+  #studyPlanner .sp-subject-line b {
+    color: #0f172a;
+    font-weight: 750;
+  }
+
+  #studyPlanner .sp-mini-track {
+    height: 8px !important;
+    background: #eff6ff !important;
+    border-radius: 999px !important;
+  }
+
+  #studyPlanner .sp-mini-track b {
+    background:
+      linear-gradient(
+        90deg,
+        #38bdf8,
+        #2563eb
+      ) !important;
+
+    border-radius: 999px !important;
+  }
+
+  /* =====================================
+     최근 학습 기록
+  ===================================== */
+
+  #studyPlanner .sp-record {
+    padding: 13px 3px !important;
+    border-bottom:
+      1px solid #f1f5f9 !important;
+  }
+
+  #studyPlanner .sp-record b {
+    font-size: 13px !important;
+    font-weight: 750;
+    color: #1e293b !important;
+  }
+
+  #studyPlanner .sp-record small {
+    color: #94a3b8 !important;
+    font-size: 11px !important;
+  }
+
+  #studyPlanner .sp-record-note {
+    color: #64748b !important;
+    font-size: 12px !important;
+  }
+
+  #studyPlanner .sp-empty {
+    background: #f8fafc !important;
+    color: #94a3b8 !important;
+
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px !important;
+
+    padding: 24px !important;
+    font-size: 13px;
+  }
+
+  /* =====================================
+     공부 기록 입력 폼
+  ===================================== */
+
+  #studyPlanner .sp-form {
+    display: grid;
+    grid-template-columns:
+      minmax(0,1fr) minmax(100px,140px);
+
+    gap: 12px !important;
+  }
+
+  #studyPlanner .sp-form input[name="note"],
+  #studyPlanner .sp-form button {
+    grid-column: 1 / -1;
+  }
+
+  /* =====================================
+     모바일 반응형 디자인
+  ===================================== */
+
+  @media (max-width: 700px) {
+
+    #modal:has(#studyPlanner) {
+      padding: 17px !important;
+
+      width: calc(100vw - 14px) !important;
+      max-height: 94dvh !important;
+
+      border-radius: 15px !important;
+    }
+
+    #modal:has(#studyPlanner) > h2 {
+      font-size: 18px !important;
+      margin-bottom: 14px !important;
+    }
+
+    #studyPlanner .sp-hero {
+      padding: 20px 17px !important;
+      margin-bottom: 19px !important;
+      border-radius: 14px !important;
+    }
+
+    #studyPlanner .sp-hero strong {
+      font-size: 19px !important;
+    }
+
+    #studyPlanner .sp-hero-icon {
+      width: 52px;
+      height: 52px;
+      font-size: 28px !important;
+      border-radius: 13px;
+    }
+
+    #studyPlanner .sp-ddays {
+      gap: 7px !important;
+    }
+
+    #studyPlanner .sp-day-card {
+      padding: 12px 9px !important;
+      border-radius: 12px !important;
+    }
+
+    #studyPlanner .sp-day-name {
+      font-size: 11px !important;
+    }
+
+    #studyPlanner .sp-day-date {
+      font-size: 10px !important;
+    }
+
+    #studyPlanner .sp-day-count {
+      font-size: 20px !important;
+    }
+
+    #studyPlanner .sp-two {
+      grid-template-columns: 1fr !important;
+      gap: 12px !important;
+    }
+
+    #studyPlanner .sp-card {
+      padding: 17px !important;
+      border-radius: 13px !important;
+    }
+
+    #studyPlanner .sp-section-title {
+      margin: 20px 0 10px !important;
+      font-size: 15px !important;
+    }
+
+    #studyPlanner .sp-kpi {
+      font-size: 28px !important;
+    }
+
+    #studyPlanner .sp-form {
+      grid-template-columns:
+        minmax(0,1fr) 100px;
+      gap: 8px !important;
+    }
+
+    #studyPlanner button {
+      padding: 10px !important;
+      font-size: 12px !important;
+    }
+  }
+
+  @media (max-width: 360px) {
+
+    #studyPlanner .sp-day-card {
+      padding: 10px 6px !important;
+    }
+
+    #studyPlanner .sp-day-count {
+      font-size: 17px !important;
+    }
+
+    #studyPlanner .sp-day-name {
+      font-size: 10px !important;
+    }
+
+    #studyPlanner .sp-hero-icon {
+      display: none;
+    }
+  }
+
+  `;
+
+  document.head.appendChild(style);
+
+  console.log('프리미엄 학습 플래너 디자인 적용 완료');
+
+})();
