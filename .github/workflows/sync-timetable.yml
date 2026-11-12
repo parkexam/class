@@ -1,0 +1,46 @@
+
+name: Sync Class Timetable
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "15,45 0-8 * * 1-5"
+    - cron: "45 23 * * 0-4"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install parser
+        run: npm install --no-save comcigan-parser
+
+      - name: Fetch timetable
+        run: node scripts/sync-timetable.cjs
+
+      - name: Save timetable
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add timetable.json
+
+          if ! git diff --cached --quiet; then
+            git commit -m "Update class timetable"
+            git push
+          else
+            echo "No changes"
+          fi
