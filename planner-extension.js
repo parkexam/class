@@ -678,13 +678,16 @@ function saveGoalTitle(id, title) {
     );
 
     // 달성률 계산
-    const dayPercent = Math.min(
-      100,Math.round(total/goal*100)
-    );
+   
+// 목표를 설정한 경우에만 달성률 계산
+const dayPercent = goal > 0
+  ? Math.min(100, Math.round(total / goal * 100))
+  : 0;
 
-    const weekPercent = Math.min(
-      100,Math.round(weekTotal/(goal*7)*100)
-    );
+const weekPercent = goal > 0
+  ? Math.min(100, Math.round(weekTotal / (goal * 7) * 100))
+  : 0;
+
 
     const tasks = loadTasks(id,key);
     const done = tasks.filter(t=>t.done).length;
@@ -693,16 +696,30 @@ function saveGoalTitle(id, title) {
       ? Math.round(done/tasks.length*100)
       : 0;
 
-    // 오늘 목표
-    $p('spTodayMin').textContent = total;
-    $p('spTodayGoal').textContent = goal;
-    $p('spTodayPct').textContent = `${dayPercent}%`;
-    $p('spTodayFill').style.width = `${dayPercent}%`;
+  
+// 오늘 목표
+$p('spTodayMin').textContent = total;
+$p('spTodayGoal').textContent = goal || '미설정';
+$p('spGoalUnit').textContent = goal ? '분' : '';
 
-    // 주간 목표
-    $p('spWeekMin').textContent = weekTotal;
-    $p('spWeekPct').textContent = `${weekPercent}%`;
-    $p('spWeekFill').style.width = `${weekPercent}%`;
+$p('spTodayPct').textContent =
+  goal > 0 ? `${dayPercent}%` : '목표 미설정';
+
+$p('spTodayFill').style.width =
+  `${dayPercent}%`;
+
+// 주간 목표
+$p('spWeekMin').textContent = weekTotal;
+
+$p('spWeekPct').textContent =
+  goal > 0 ? `${weekPercent}%` : '목표 미설정';
+
+$p('spWeekFill').style.width =
+  `${weekPercent}%`;
+
+// 학생이 직접 설정한 목표 표시
+$p('spGoal').value = goal || '';
+$p('spGoalTitle').value = loadGoalTitle(id);
 
     // 체크리스트
     $p('spTaskPct').textContent =
@@ -891,7 +908,7 @@ function saveGoalTitle(id, title) {
             <div class="sp-kpi">
               <span id="spTodayMin">0</span>
               <span>
-                / <span id="spTodayGoal">60</span>분
+                / <span id="spTodayGoal">미설</span><span id="spGoalUnit"></span>
               </span>
             </div>
 
@@ -905,21 +922,53 @@ function saveGoalTitle(id, title) {
             </div>
 
             <div class="sp-inline" style="margin-top:12px">
-              <label for="spGoal" class="sp-small">
-                하루 목표(분)
-              </label>
+              
+<div style="margin-top:14px">
 
-              <input id="spGoal"
-                     type="number"
-                     min="10"
-                     max="600"
-                     step="5"
-                     style="width:85px">
+  <label for="spGoalTitle"
+         class="sp-small"
+         style="display:block;margin-bottom:6px">
+    ✏️ 나만의 학습 목표
+  </label>
 
-              <button type="button" id="spGoalSave">
-                저장
-              </button>
-            </div>
+  <input
+    id="spGoalTitle"
+    type="text"
+    maxlength="80"
+    placeholder="예: 매일 과학 개념 3개 정리하기"
+    style="width:100%;margin-bottom:12px"
+  >
+
+  <label for="spGoal"
+         class="sp-small"
+         style="display:block;margin-bottom:6px">
+    ⏰ 하루 목표 공부 시간(분)
+  </label>
+
+  <div class="sp-inline">
+
+    <input
+      id="spGoal"
+      type="number"
+      min="10"
+      max="600"
+      step="5"
+      placeholder="예: 90"
+      style="width:120px"
+    >
+
+    <button type="button" id="spGoalSave">
+      🎯 내 목표 저장
+    </button>
+
+  </div>
+
+  <p class="sp-note">
+    목표 내용과 시간은 언제든지 변경할 수 있어요.
+  </p>
+
+</div>
+
           </div>
 
           <div class="sp-card">
@@ -1046,23 +1095,24 @@ function saveGoalTitle(id, title) {
 
         // ===== 목표 저장 =====
 
-        el.querySelector('#spGoalSave').onclick = () => {
-          const val = Number(
-            el.querySelector('#spGoal').value
-          );
+       
+el.querySelector('#spGoalSave').onclick = () => {
+  const val = Number(
+    el.querySelector('#spGoal').value
+  );
 
-          if (!Number.isInteger(val) ||
-              val < 10 || val > 600) {
-            return toast('하루 목표는 10~600분으로 입력해 줘.');
-          }
+  if (!Number.isInteger(val) ||
+      val < 10 || val > 600) {
+    return toast('하루 목표는 10~600분으로 입력해 줘.');
+  }
 
-          if (!saveGoal(id,val)) {
-            return toast('목표 저장에 실패했어.');
-          }
+  if (!saveGoal(id,val)) {
+    return toast('목표 저장에 실패했어.');
+  }
 
-          refreshPlanner();
-          toast('🎯 하루 목표 저장 완료!');
-        };
+  refreshPlanner();
+  toast('🎯 하루 목표 저장 완료!');
+};
 
         // ===== 할 일 추가 =====
 
