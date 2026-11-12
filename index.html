@@ -3621,6 +3621,274 @@ import {
   }
 </style>
 
+<script>
+(() => {
+  if (window.__dailyMissionUI) return;
+  window.__dailyMissionUI = true;
+
+  const todayKST = () => new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+
+  function isToday(s) {
+    if (s.dayKey) return s.dayKey === todayKST();
+
+    // 기존 날짜 형식도 인식
+    const a = String(s.date || '').match(
+      /(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\./
+    );
+
+    return !!a &&
+      `${a[1]}-${a[2].padStart(2,'0')}-${a[3].padStart(2,'0')}`
+        === todayKST();
+  }
+
+  const mineToday = (s, mid, id) =>
+    Number(s.studentId) === Number(id) &&
+    s.missionId === mid &&
+    isToday(s);
+
+  async function sendMission(mid, detail) {
+
+    // Firebase 접속 시 서버에 저장
+    if (window.ClassCloud?.active) {
+      return window.ClassCloud.submit(mid, detail);
+    }
+
+    // 체험 모드에서도 날짜별 미션 운영
+    const id = state.chosen;
+    const mission = v6.missions.find(
+      m => m.id === mid && m.active
+    );
+
+    detail = String(detail || '').trim();
+
+    if (!mission || detail.length < 3 || detail.length > 250) {
+      return toast('미션 내용은 3~250자로 작성해 줘');
+    }
+
+    const existing = v6.submissions.find(
+      s => mineToday(s, mid, id) &&
+        s.status !== 'rejected'
+    );
+
+    if (existing) {
+      return toast('오늘 이미 제출한 미션이야');
+    }
+
+    const rejected = v6.submissions.find(
+      s => mineToday(s, mid, id) &&
+        s.status === 'rejected'
+    );
+
+    if (rejected) {
+      Object.assign(rejected, {
+        detail,
+        status: 'pending',
+        date: new Date().toLocaleString('ko-KR')
+      });
+    } else {
+      v6.submissions.push({
+        id: 's' + Date.now(),
+        studentId: id,
+        missionId: mid,
+        detail,
+        status: 'pending',
+        date: new Date().toLocaleString('ko-KR'),
+        dayKey: todayKST()
+      });
+    }
+
+    v6save();
+    updateUI();
+    toast('📨 오늘의 미션을 제출했어!');
+    window.openV6Missions();
+  }
+
+  // 학생에게 보이는 미션 창
+  window.openV6Missions = function () {
+
+    const id =
+      window.ClassCloud?.active &&
+      window.ClassCloud.role === 'student'
+        ? window.ClassCloud.studentId
+        : state.chosen;
+
+    const rows = v6.missions
+      .filter(m => m.active)
+      .map(m => {
+
+        const s = v6.submissions.find(
+          x => mineToday(x, m.id, id) &&
+            x.status !== 'rejected'
+        );
+
+        return `
+          <div class="v6row">
+            <h3>
+              🎯 ${escapeText(m.name)}
+              <span class="badge">+${m.xp} XP</span>
+            </h3>
+
+            <p>${escapeText(m.desc)}</p>
+
+            ${s ? `
+              <span class="badge">
+                ${s.status === 'pending'
+                  ? '⏳ 오늘 제출 · 승인 대기'
+                  : '✅ 오늘 승인 완료'}
+              </span>
+              <p>${escapeText(s.detail)}</p>
+            ` : `
+              <textarea
+                class="field"
+                rows="2"
+                maxlength="250"
+                data-proof="${escapeText(m.id)}"
+                placeholder="오늘 활동한 내용을 적어 줘"
+              ></textarea>
+
+              <button
+                class="primary"
+                data-submit="${escapeText(m.id)}"
+              >
+                📨 오늘 미션 제출
+              </button>
+            `}
+          </div>
+        `;
+      }).join('');
+
+    openModal(
+      `✅ ${id}번 학생 · 학급 미션`,
+      `
+        <p class="desc">
+          하루에 각 미션을 1회 제출할 수 있어.
+          선생님 승인 후 개인 XP와 학급 XP가 올라가.
+          한국 시간 자정에 다음 날 미션이 열려.
+          반려된 미션은 다시 제출할 수 있어.
+        </p>
+
+        ${rows || '<p>운영 중인 미션이 없어.</p>'}
+      `,
+      el => {
+        el.querySelectorAll('[data-submit]').forEach(btn => {
+          btn.onclick = async () => {
+            const field = el.querySelector(
+              `[data-proof="${btn.dataset.submit}"]`
+            );
+
+            btn.disabled = true;
+
+            try {
+              await sendMission(
+                btn.dataset.submit,
+                field.value
+              );
+            } finally {
+              btn.disabled = false;
+            }
+          };
+        });
+      }
+    );
+  };
+
+  // 오른쪽 위 미션 현황도 오늘 기준
+  const oldUpdateUI = window.updateUI;
+
+  window.updateUI = function (...args) {
+    const result = oldUpdateUI.apply(this, args);
+
+    const id = state.chosen;
+
+    const active = v6.missions
+      .filter(m => m.active)
+      .slice(0, 5);
+
+    const todaySubs = active.map(m => ({
+      m,
+      s: v6.submissions.find(
+        s => mineToday(s, m.id, id) &&
+          s.status !== 'rejected'
+      )
+    }));
+
+    const done = todaySubs.filter(
+      x => x.s?.status === 'approved'
+    ).length;
+
+    const pending = todaySubs.filter(
+      x => x.s?.status === 'pending'
+    ).length;
+
+    const bar = document.getElementById('missionBar');
+    const count = document.getElementById('missionCount');
+    const lines = document.getElementById('missionLines');
+
+    if (bar) {
+      bar.style.width = (
+        active.length
+          ? 100 * done / active.length
+          : 0
+      ) + '%';
+    }
+
+    if (count) {
+      count.textContent =
+        `오늘 ${done}개 승인 · ${pending}개 대기`;
+    }
+
+    if (lines) {
+      lines.innerHTML = todaySubs.map(({m, s}) => `
+        <div class="missionLine">
+          <span class="${
+            s?.status === 'approved'
+              ? 'check'
+              : 'empty'
+          }">
+            ${
+              s?.status === 'approved'
+                ? '☑️'
+                : s?.status === 'pending'
+                  ? '⏳'
+                  : '☐'
+            }
+          </span>
+          <span>${escapeText(m.name)}</span>
+        </div>
+      `).join('');
+    }
+
+    return result;
+  };
+
+  // Firebase에서 새 승인 결과가 들어오면
+  // 열려 있는 미션 창도 갱신
+  const oldApply = window.__v7Apply;
+
+  window.__v7Apply = function (kind, data) {
+    const result = oldApply.apply(this, arguments);
+
+    if (
+      kind === 'submissions' &&
+      document.getElementById('overlay')
+        ?.classList.contains('open') &&
+      document.getElementById('modalTitle')
+        ?.textContent.includes('학급 미션')
+    ) {
+      window.openV6Missions();
+    }
+
+    return result;
+  };
+
+})();
+</script>
+
 </body></html>
 
 
