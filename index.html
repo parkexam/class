@@ -369,8 +369,38 @@ function drawPerson(n,isPlayer,time){let phase=phaseFor(isPlayer?state.lv:n.lv),
    if(isPlayer){g.strokeStyle='#ffeb91';g.lineWidth=2.8;g.beginPath();g.ellipse(0,1,26,8,0,0,Math.PI*2);g.stroke();}
    // This demo has a walking sway, not full directional animation.
    if(dir<0)g.scale(-1,1);
-   if(n.id===29 && student29Avatar.complete && student29Avatar.naturalWidth){
-  g.drawImage(student29Avatar,si*STUDENT_AVATAR_WIDTH,0,STUDENT_AVATAR_WIDTH,STUDENT_AVATAR_HEIGHT,-STUDENT_AVATAR_WIDTH/2,-STUDENT_AVATAR_HEIGHT+7,STUDENT_AVATAR_WIDTH,STUDENT_AVATAR_HEIGHT);
+   
+if(n.id===29 && si===0){
+  // 29번 아기: 다른 학생과 같은 평범한 기어가는 모습
+  const normalRow = STUDENT_AVATAR_ROWS[21];
+
+  g.drawImage(
+    studentAvatarAtlas,
+    0,
+    normalRow * STUDENT_AVATAR_HEIGHT,
+    STUDENT_AVATAR_WIDTH,
+    STUDENT_AVATAR_HEIGHT,
+    -STUDENT_AVATAR_WIDTH / 2,
+    -STUDENT_AVATAR_HEIGHT + 7,
+    STUDENT_AVATAR_WIDTH,
+    STUDENT_AVATAR_HEIGHT
+  );
+
+}else if(n.id===29 && student29Avatar.complete && student29Avatar.naturalWidth){
+  // 아기 단계를 지나면 기존 29번 성장 캐릭터 사용
+  g.drawImage(
+    student29Avatar,
+    si * STUDENT_AVATAR_WIDTH,
+    0,
+    STUDENT_AVATAR_WIDTH,
+    STUDENT_AVATAR_HEIGHT,
+    -STUDENT_AVATAR_WIDTH / 2,
+    -STUDENT_AVATAR_HEIGHT + 7,
+    STUDENT_AVATAR_WIDTH,
+    STUDENT_AVATAR_HEIGHT
+  );
+}
+
  }else if(n.id===23 && student23Avatar.complete && student23Avatar.naturalWidth){
   g.drawImage(student23Avatar,si*STUDENT_AVATAR_WIDTH,0,STUDENT_AVATAR_WIDTH,STUDENT_AVATAR_HEIGHT,-STUDENT_AVATAR_WIDTH/2,-STUDENT_AVATAR_HEIGHT+7,STUDENT_AVATAR_WIDTH,STUDENT_AVATAR_HEIGHT);
  }else{
