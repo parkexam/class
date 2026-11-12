@@ -89,21 +89,87 @@ function subscribe(){
 }
 const timestamp=()=>new Date().toLocaleString('ko-KR');
 function teacher(){if(!cloud.active||cloud.role!=='teacher'){notify('선생님 계정에서만 가능한 기능이야');return false;}return true;}
-async function submit(mid,detail){
- if(!cloud.active||cloud.role!=='student'){notify('학생 계정으로 로그인해야 제출할 수 있어');return;}
- detail=String(detail||'').trim();if(detail.length<3||detail.length>250){notify('활동 내용은 3~250자로 입력해 줘');return;}
- try{
-   const mission=await getDoc(doc(db,root,'missions',mid));if(!mission.exists()||!mission.data().active)throw Error('현재 운영 중인 미션이 아니야');
-   // Fixed submission key: cannot submit more than once except teacher explicitly removes/reopens.
-   const ref=doc(db,root,'submissions',`${activeUser.uid}_${mid}`);
-   await runTransaction(db,async(tx)=>{
-     const old=await tx.get(ref);
-     if(old.exists()&&old.data().status!=='rejected')throw Error('이미 신청하거나 승인받은 미션이야');
-     const data={ownerUid:activeUser.uid,studentId:cloud.studentId,missionId:mid,detail,status:'pending',date:timestamp()};
-     if(old.exists())tx.update(ref,{detail,status:'pending',date:timestamp()});else tx.set(ref,data);
-   });notify('📨 제출했어! 선생님 승인을 기다려 줘.');
- }catch(e){fail(e)}
+
+const dayKST = () => new Intl.DateTimeFormat('sv-SE', {
+  timeZone: 'Asia/Seoul',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+}).format(new Date());
+
+async function submit(mid, detail) {
+  if (!cloud.active || cloud.role !== 'student') {
+    notify('학생 계정으로 로그인해야 제출할 수 있어');
+    return;
+  }
+
+  detail = String(detail || '').trim();
+
+  if (detail.length < 3 || detail.length > 250) {
+    notify('활동 내용은 3~250자로 입력해 줘');
+    return;
+  }
+
+  try {
+    const mission = await getDoc(
+      doc(db, root, 'missions', mid)
+    );
+
+    if (!mission.exists() || !mission.data().active) {
+      throw Error('현재 운영 중인 미션이 아니야');
+    }
+
+    const dayKey = dayKST();
+
+    // 학생 + 미션 + 날짜를 합쳐 문서 ID 생성
+    // 같은 날에는 언제나 같은 ID가 사용됨
+    const ref = doc(
+      db,
+      root,
+      'submissions',
+      `${activeUser.uid}_${mid}_${dayKey}`
+    );
+
+    await runTransaction(db, async tx => {
+      const old = await tx.get(ref);
+
+      if (
+        old.exists() &&
+        old.data().status !== 'rejected'
+      ) {
+        throw Error('오늘 이미 제출하거나 승인받은 미션이야');
+      }
+
+      const now = timestamp();
+
+      if (old.exists()) {
+        // 교사가 반려했다면 같은 날 재제출
+        tx.update(ref, {
+          detail,
+          status: 'pending',
+          date: now
+        });
+      } else {
+        // 날짜마다 새 제출 문서 생성
+        tx.set(ref, {
+          ownerUid: activeUser.uid,
+          studentId: cloud.studentId,
+          missionId: mid,
+          detail,
+          status: 'pending',
+          date: now,
+          dayKey
+        });
+      }
+    });
+
+    notify('📨 오늘의 미션을 제출했어! 선생님 승인을 기다려 줘.');
+
+  } catch (e) {
+    fail(e);
+  }
 }
+
 async function approve(sid,decision){
  if(!teacher())return;
  if(!['approved','rejected'].includes(decision))return;
