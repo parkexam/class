@@ -1626,6 +1626,537 @@ if (app) {
 
 </script>
 
+<!-- 문산중 1학년 12반: 급식 고정판과 시간표 -->
+<style>
+  #classMealBoard {
+    position: absolute;
+    left: 42px;
+    top: 105px;
+    width: 305px;
+    max-width: calc(100vw - 55px);
+    max-height: 165px;
+    z-index: 20;
+    overflow: hidden;
+    border: 3px solid #8b6041;
+    border-radius: 12px;
+    background: #fffdf5;
+    color: #352c25;
+    box-shadow: 0 6px 0 #4e3629, 0 12px 25px #0004;
+    font: 13px/1.4 Pretendard, system-ui, sans-serif;
+  }
+
+  #classMealBoard .meal-head {
+    background: #805638;
+    color: white;
+    padding: 7px 9px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 5px;
+    font-weight: 800;
+  }
+
+  #classMealBoard button {
+    flex-shrink: 0;
+    border: none;
+    border-radius: 7px;
+    background: #fff0d2;
+    color: #614122;
+    padding: 5px 8px;
+    cursor: pointer;
+    font-weight: 800;
+    font-size: 11px;
+  }
+
+  #classMealBoard .meal-content {
+    padding: 8px 12px;
+    max-height: 114px;
+    overflow: auto;
+  }
+
+  #classMealDate {
+    display: block;
+    color: #977e66;
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+
+  #classMealText {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  /* 시간표 팝업 */
+  #classTimetableOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    background: rgba(15,23,42,.76);
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+  }
+
+  #classTimetablePanel {
+    background: #f8fafc;
+    color: #0f172a;
+    border-radius: 18px;
+    padding: 20px;
+    width: min(760px, 100%);
+    max-height: 92dvh;
+    overflow: auto;
+    box-shadow: 0 20px 60px #0005;
+    font-family: Pretendard, system-ui, sans-serif;
+  }
+
+  #classTimetablePanel .tt-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+
+  #classTimetablePanel h2 {
+    color: #0f172a;
+    margin: 0;
+    font-size: 21px;
+  }
+
+  #classTimetablePanel .tt-subtitle {
+    color: #64748b;
+    font-size: 12px;
+    margin: 6px 0 15px;
+  }
+
+  #classTimetablePanel .tt-close {
+    background: #e2e8f0;
+    color: #334155;
+    border: none;
+    border-radius: 9px;
+    padding: 9px 12px;
+    cursor: pointer;
+  }
+
+  #classTimetablePanel .tt-scroll {
+    overflow-x: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: white;
+  }
+
+  #classTimetablePanel table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 520px;
+    table-layout: fixed;
+    font-size: 12px;
+  }
+
+  #classTimetablePanel th,
+  #classTimetablePanel td {
+    border: 1px solid #e2e8f0;
+    padding: 11px 5px;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  #classTimetablePanel th {
+    background: #eff6ff;
+    color: #1e40af;
+    font-weight: 800;
+  }
+
+  #classTimetablePanel td:first-child {
+    background: #f1f5f9;
+    font-weight: 800;
+    width: 65px;
+  }
+
+  #classTimetablePanel .tt-subject {
+    display: block;
+    font-weight: 800;
+    font-size: 13px;
+  }
+
+  #classTimetablePanel .tt-teacher {
+    display: block;
+    color: #64748b;
+    font-size: 11px;
+    margin-top: 3px;
+  }
+
+  #classTimetablePanel td.tt-changed {
+    background: #fff5cd;
+  }
+
+  #classTimetablePanel .tt-link {
+    display: inline-block;
+    margin-top: 14px;
+    color: #2563eb;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  @media (max-width: 600px) {
+    #classMealBoard {
+      left: 42px;
+      top: 105px;
+      width: min(260px, calc(100vw - 56px));
+    }
+
+    #classTimetablePanel {
+      padding: 14px;
+    }
+  }
+</style>
+
+<script>
+(() => {
+  'use strict';
+
+  // 이전 공지판과 별도 급식 버튼 제거
+  document.querySelectorAll(
+    '#journeyNotice, #schoolMealBtn, #schoolMealOverlay'
+  ).forEach(el => el.remove());
+
+  // 기존 공지 실시간 구독이 남아 있더라도
+  // 삭제된 게시판을 수정하려고 하지 않도록 처리
+  if (window.JourneyNotice) {
+    window.JourneyNotice.receive = function() {};
+  }
+
+  const shell = document.getElementById('shell') || document.body;
+
+  // 급식판 생성
+  const board = document.createElement('div');
+  board.id = 'classMealBoard';
+
+  board.innerHTML = `
+    <div class="meal-head">
+      <span>🍱 오늘의 급식</span>
+      <button id="openClassTimetable" type="button">
+        📅 시간표
+      </button>
+    </div>
+    <div class="meal-content">
+      <span id="classMealDate"></span>
+      <div id="classMealText">급식 조회 중...</div>
+    </div>
+  `;
+
+  shell.appendChild(board);
+
+  // 시간표 창 생성
+  const overlay = document.createElement('div');
+  overlay.id = 'classTimetableOverlay';
+
+  overlay.innerHTML = `
+    <section id="classTimetablePanel"
+             role="dialog"
+             aria-modal="true"
+             aria-label="학급 시간표">
+      <div class="tt-head">
+        <h2>📅 1학년 12반 시간표</h2>
+        <button class="tt-close"
+                id="closeClassTimetable"
+                type="button">✕</button>
+      </div>
+
+      <p class="tt-subtitle" id="classTimetableStatus">
+        시간표를 불러오는 중...
+      </p>
+
+      <div class="tt-scroll">
+        <table id="classTimetableTable"></table>
+      </div>
+
+      <a class="tt-link"
+         href="http://컴시간학생.kr/"
+         target="_blank"
+         rel="noopener noreferrer">
+        컴시간학생에서 직접 확인하기
+      </a>
+    </section>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const mealDate = document.getElementById('classMealDate');
+  const mealText = document.getElementById('classMealText');
+
+  // 한국 날짜
+  function koreanDate() {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Seoul',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(new Date());
+
+    const get = type =>
+      parts.find(p => p.type === type).value;
+
+    return `${get('year')}-${get('month')}-${get('day')}`;
+  }
+
+  function mondayOf(dateText) {
+    const d = new Date(dateText + 'T00:00:00Z');
+    const diff = (d.getUTCDay() + 6) % 7;
+    d.setUTCDate(d.getUTCDate() - diff);
+    return d.toISOString().slice(0, 10);
+  }
+
+  // ============================================
+  // 나이스 급식 조회
+  // ============================================
+
+  async function refreshMeal() {
+    const date = koreanDate();
+
+    mealDate.textContent = date + ' · 문산중학교 중식';
+    mealText.textContent = '급식 정보를 불러오는 중...';
+
+    const params = new URLSearchParams({
+      Type: 'json',
+      pIndex: '1',
+      pSize: '5',
+      ATPT_OFCDC_SC_CODE: 'S10',
+      SD_SCHUL_CODE: '9051054',
+      MLSV_YMD: date.replaceAll('-', ''),
+      MMEAL_SC_CODE: '2'
+    });
+
+    try {
+      const res = await fetch(
+        'https://open.neis.go.kr/hub/mealServiceDietInfo?' +
+        params,
+        { cache: 'no-store' }
+      );
+
+      if (!res.ok) {
+        throw new Error('HTTP ' + res.status);
+      }
+
+      const data = await res.json();
+      const rows = data.mealServiceDietInfo?.[1]?.row || [];
+
+      const row = rows.find(
+        x => String(x.MMEAL_SC_CODE) === '2'
+      );
+
+      if (!row) {
+        mealText.textContent =
+          '오늘 등록된 급식 정보가 없습니다.';
+        return;
+      }
+
+      mealText.textContent = String(row.DDISH_NM || '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]*>/g, '')
+        .trim();
+
+    } catch (error) {
+      console.error('급식 조회 오류:', error);
+
+      mealText.textContent =
+        '급식을 불러오지 못했습니다.\n' +
+        '나이스 연결 상태를 확인해 주세요.';
+    }
+  }
+
+  refreshMeal();
+
+  // 열린 화면에서도 주기적으로 새로 확인
+  setInterval(refreshMeal, 60 * 60 * 1000);
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) refreshMeal();
+  });
+
+  // ============================================
+  // 컴시간 시간표 JSON 조회
+  // ============================================
+
+  const status = document.getElementById('classTimetableStatus');
+  const table = document.getElementById('classTimetableTable');
+
+  function clearTable() {
+    table.replaceChildren();
+  }
+
+  // 현재 GitHub Pages 주소에서 저장소 추정
+  function githubRepository() {
+    const host = location.hostname;
+
+    if (!host.endsWith('.github.io')) return null;
+
+    const owner = host.split('.')[0];
+    const path = location.pathname.split('/').filter(Boolean);
+
+    return {
+      owner,
+      repo: path[0] || owner + '.github.io'
+    };
+  }
+
+  async function getTimetableData() {
+    const repository = githubRepository();
+
+    if (!repository) {
+      throw new Error('GitHub Pages 주소에서만 자동 조회할 수 있습니다.');
+    }
+
+    // main 또는 master 브랜치 지원
+    for (const branch of ['main', 'master']) {
+      const url =
+        `https://raw.githubusercontent.com/` +
+        `${repository.owner}/${repository.repo}/` +
+        `${branch}/timetable.json?t=${Date.now()}`;
+
+      const response = await fetch(url, {
+        cache: 'no-store'
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+    }
+
+    throw new Error('timetable.json을 찾을 수 없습니다.');
+  }
+
+  function renderTimetable(data) {
+    clearTable();
+
+    const days = data.days;
+
+    if (!Array.isArray(days) || days.length !== 5) {
+      throw new Error('시간표 형식이 올바르지 않습니다.');
+    }
+
+    const weekday = ['월', '화', '수', '목', '금'];
+
+    const head = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+
+    for (const title of ['교시', ...weekday]) {
+      const th = document.createElement('th');
+      th.textContent = title;
+      headerRow.appendChild(th);
+    }
+
+    head.appendChild(headerRow);
+    table.appendChild(head);
+
+    const body = document.createElement('tbody');
+
+    const periods = Math.max(
+      7,
+      ...days.map(day => Array.isArray(day) ? day.length : 0)
+    );
+
+    for (let period = 0; period < periods; period++) {
+      const tr = document.createElement('tr');
+
+      const number = document.createElement('td');
+      number.textContent = `${period + 1}교시`;
+      tr.appendChild(number);
+
+      for (let day = 0; day < 5; day++) {
+        const lesson = days[day]?.[period];
+        const td = document.createElement('td');
+
+        if (lesson?.modified) {
+          td.className = 'tt-changed';
+        }
+
+        const sub = document.createElement('span');
+        sub.className = 'tt-subject';
+        sub.textContent = lesson?.subject || '—';
+
+        const teacher = document.createElement('span');
+        teacher.className = 'tt-teacher';
+        teacher.textContent = lesson?.teacher || '';
+
+        td.append(sub, teacher);
+        tr.appendChild(td);
+      }
+
+      body.appendChild(tr);
+    }
+
+    table.appendChild(body);
+  }
+
+  async function openTimetable() {
+    overlay.style.display = 'flex';
+    clearTable();
+
+    status.textContent = '컴시간 시간표 자료를 확인하고 있습니다.';
+
+    try {
+      const data = await getTimetableData();
+
+      // 지난주 자료를 최신 자료처럼 표시하지 않음
+      const thisMonday = mondayOf(koreanDate());
+
+      if (data.weekStart !== thisMonday) {
+        status.textContent =
+          '이번 주 시간표가 아직 갱신되지 않았습니다. ' +
+          '아래 컴시간학생 링크에서 확인해 주세요.';
+        return;
+      }
+
+      renderTimetable(data);
+
+      const updated = new Date(data.updatedAt);
+      const updatedText = Number.isNaN(updated.getTime())
+        ? '시각 미확인'
+        : updated.toLocaleString('ko-KR', {
+            timeZone: 'Asia/Seoul'
+          });
+
+      status.textContent =
+        `${data.weekStart} 주간 · 마지막 수집 ${updatedText} ` +
+        '(컴시간 자료 주기적 동기화)';
+
+    } catch (error) {
+      console.error(error);
+
+      status.textContent =
+        '시간표 조회 실패: ' + error.message +
+        ' 아래 컴시간학생에서 직접 확인해 주세요.';
+    }
+  }
+
+  document.getElementById('openClassTimetable')
+    .addEventListener('click', openTimetable);
+
+  document.getElementById('closeClassTimetable')
+    .addEventListener('click', () => {
+      overlay.style.display = 'none';
+    });
+
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) {
+      overlay.style.display = 'none';
+    }
+  });
+
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' &&
+        overlay.style.display === 'flex') {
+      overlay.style.display = 'none';
+    }
+  });
+
+})();
+</script>
+<!-- 급식 및 시간표 코드 끝 -->
+
 </body></html>
 
 
