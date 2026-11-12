@@ -4456,102 +4456,27 @@ import {
     dressBaby(ac, 10, [62, 139, 202]);
     dressBaby(ac, 12, [202, 101, 159]);
 
-    // 4. 29번 기어가는 아기로 변경
-    // 21번의 기어가는 자세를 활용하고
-    // 29번 원래 얼굴과 머리를 합성
+    // 4. 29번 아기: 21번과 동일한 정상 캐릭터 사용
+    // 다른 학생 및 성장/로그인 기능은 그대로 유지
     const donorRow = STUDENT_AVATAR_ROWS[21];
     const targetRow = STUDENT_AVATAR_ROWS[29];
-
-    if (
-      Number.isInteger(donorRow) &&
-      Number.isInteger(targetRow)
-    ) {
-
-      const baby29 =
-        document.createElement('canvas');
-
-      baby29.width = W;
-      baby29.height = H;
-
-      const bc = baby29.getContext('2d');
-
-      // 기어가는 몸 자세
-      bc.drawImage(
-        srcAtlas,
-        0, donorRow * H, W, H,
-        0, 0, W, H
-      );
-
-      // 29번 원래 얼굴 준비
-      const face =
-        document.createElement('canvas');
-
-      face.width = W;
-      face.height = H;
-
-      const fc = face.getContext('2d');
-
-      fc.drawImage(
-        srcAtlas,
-        0, targetRow * H, W, H,
-        0, 0, W, H
-      );
-
-      // 머리와 얼굴 경계 자연스럽게 합성
-      const mask =
-        document.createElement('canvas');
-
-      mask.width = W;
-      mask.height = H;
-
-      const mc = mask.getContext('2d');
-
-      mc.filter = 'blur(1.2px)';
-      mc.fillStyle = '#ffffff';
-
-      mc.beginPath();
-      mc.ellipse(
-        60, 90,
-        27, 23,
-        0, 0, Math.PI * 2
-      );
-      mc.fill();
-
-      fc.globalCompositeOperation =
-        'destination-in';
-
-      fc.drawImage(mask, 0, 0);
-
-      fc.globalCompositeOperation =
-        'source-over';
-
-      bc.drawImage(face, 0, 0);
-
-      // 프로필 성장 이미지에도 적용
-      ac.clearRect(
-        0, targetRow * H, W, H
-      );
-
-      ac.drawImage(
-        baby29,
-        0, targetRow * H
-      );
-
-      // 게임에서 사용하는 29번 전용 이미지 수정
-      const strip =
-        document.createElement('canvas');
-
-      strip.width = src29.naturalWidth;
-      strip.height = src29.naturalHeight;
-
+    if (Number.isInteger(donorRow) && Number.isInteger(targetRow)) {
+      // 프로필용 아틀라스: 6개 성장 단계 모두 동일하게 복사
+      for (let stage = 0; stage < 6; stage++) {
+        ac.clearRect(stage * W, targetRow * H, W, H);
+        ac.drawImage(srcAtlas, stage * W, donorRow * H, W, H,
+                     stage * W, targetRow * H, W, H);
+      }
+      // 게임용 29번 전용 스트립도 같은 6단계 이미지로 교체
+      const strip = document.createElement('canvas');
+      strip.width = W * 6;
+      strip.height = H;
       const sc = strip.getContext('2d');
-
-      sc.drawImage(src29, 0, 0);
-      sc.clearRect(0, 0, W, H);
-      sc.drawImage(baby29, 0, 0);
-
-      student29Avatar.src =
-        strip.toDataURL('image/png');
+      for (let stage = 0; stage < 6; stage++) {
+        sc.drawImage(srcAtlas, stage * W, donorRow * H, W, H,
+                     stage * W, 0, W, H);
+      }
+      student29Avatar.src = strip.toDataURL('image/png');
     }
 
     // 수정한 그림을 게임에 적용
