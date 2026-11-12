@@ -1,676 +1,1044 @@
 
-import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
-import {getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
-import {getFirestore, doc, collection, query, where, onSnapshot, getDoc, getDocs, writeBatch, addDoc, setDoc, updateDoc, runTransaction, serverTimestamp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
+
+import {
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut
+} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
+
+import {
+  getFirestore,
+  doc,
+  collection,
+  query,
+  where,
+  onSnapshot,
+  getDoc,
+  getDocs,
+  writeBatch,
+  addDoc,
+  updateDoc,
+  runTransaction
+} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+
+// ==========================================
+// 기본 설정
+// ==========================================
 
 const config = window.CLASS_VILLAGE_FIREBASE_CONFIG || {};
-const configured=!!(config.apiKey && config.authDomain && config.projectId && config.appId);
-const gate=document.getElementById('cloudGate');
-const intro=document.getElementById('cloudIntro');
-const err=document.getElementById('cloudErr');
-const loginButton=document.getElementById('cloudLoginBtn');
-const demoButton=document.getElementById('cloudDemoBtn');
-const status=document.getElementById('cloudStatus');
-const statusText=document.getElementById('cloudStatusText');
-const logoutButton=document.getElementById('cloudLogoutBtn');
-const inputId=document.getElementById('cloudLoginId');
-const inputPass=document.getElementById('cloudLoginPassword');
 
-let app=null,auth=null,db=null,started=false,unsubs=[],activeUser=null,activeAccount=null;
-const root='classrooms/main';
-const cloud={active:false,role:null,studentId:null};
-window.ClassCloud=cloud;
+const configured = !!(
+  config.apiKey &&
+  config.authDomain &&
+  config.projectId &&
+  config.appId
+);
 
-function notify(s){
-  if(typeof window.toast==='function')window.toast(s);
-  else {
-    const el=document.getElementById('toast');
-    if(el){
-      el.textContent=s;
+const gate = document.getElementById('cloudGate');
+const intro = document.getElementById('cloudIntro');
+const err = document.getElementById('cloudErr');
+const loginButton = document.getElementById('cloudLoginBtn');
+const demoButton = document.getElementById('cloudDemoBtn');
+const status = document.getElementById('cloudStatus');
+const statusText = document.getElementById('cloudStatusText');
+const logoutButton = document.getElementById('cloudLogoutBtn');
+const inputId = document.getElementById('cloudLoginId');
+const inputPass = document.getElementById('cloudLoginPassword');
+
+let app = null;
+let auth = null;
+let db = null;
+let unsubs = [];
+let activeUser = null;
+let activeAccount = null;
+
+const root = 'classrooms/main';
+
+const cloud = {
+  active: false,
+  role: null,
+  studentId: null
+};
+
+window.ClassCloud = cloud;
+
+// ==========================================
+// 알림
+// ==========================================
+
+function notify(message) {
+  if (typeof window.toast === 'function') {
+    window.toast(message);
+  } else {
+    const el = document.getElementById('toast');
+
+    if (el) {
+      el.textContent = message;
       el.classList.add('show');
-      setTimeout(()=>el.classList.remove('show'),2500);
+
+      setTimeout(() => {
+        el.classList.remove('show');
+      }, 2500);
     }
   }
 }
 
-function fail(e){
-  console.error('Firebase:',e);
-  const c=e?.code||'';
-  notify(
-    c==='permission-denied'
-      ?'권한이 없거나 Firestore 규칙이 올바르지 않아'
-      :c==='unavailable'
-        ?'네트워크 연결을 확인해 줘'
-        :'저장 중 오류: '+(e?.message||'알 수 없음')
-  );
+function fail(e) {
+  console.error('Firebase:', e);
+
+  const code = e?.code || '';
+
+  if (code === 'permission-denied') {
+    notify('Firestore 접근 권한이 없습니다. 보안 규칙을 확인해 주세요.');
+  } else if (code === 'unavailable') {
+    notify('네트워크 연결을 확인해 주세요.');
+  } else {
+    notify('오류: ' + (e?.message || '알 수 없는 오류'));
+  }
 }
 
-function stop(){
-  for(const f of unsubs)try{f()}catch{}
-  unsubs=[];
-  cloud.active=false;
-  cloud.role=null;
-  cloud.studentId=null;
-  activeAccount=null;
-  document.body.classList.remove('cloudStudent','cloudTeacher');
-  status.style.display='none';
+// ==========================================
+// 로그인 상태 초기화
+// ==========================================
+
+function stop() {
+  for (const unsubscribe of unsubs) {
+    try {
+      unsubscribe();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  unsubs = [];
+
+  cloud.active = false;
+  cloud.role = null;
+  cloud.studentId = null;
+
+  activeAccount = null;
+
+  document.body.classList.remove(
+    'cloudStudent',
+    'cloudTeacher'
+  );
+
+  status.style.display = 'none';
+
   window.__v7Apply?.('disconnected');
 }
 
-function startDemo(){
+function startDemo() {
   stop();
+
   gate.classList.add('hidden');
-  notify('🎮 로컬 체험 모드 — 다른 기기와 동기화되지 않아');
+
+  notify('🎮 체험 모드로 시작합니다. 데이터는 실시간 공유되지 않습니다.');
 }
 
-function showGate(text='로그인해 주세요'){
-  intro.textContent=text;
+function showGate(message = '로그인해 주세요') {
+  intro.textContent = message;
   gate.classList.remove('hidden');
 }
 
-demoButton.addEventListener('click',startDemo);
+demoButton.addEventListener('click', startDemo);
 
-if(!configured){
-  intro.textContent='Firebase 설정값이 아직 입력되지 않았어. 기존처럼 로그인 없이 체험판을 실행할 수 있어.';
-  document.getElementById('cloudLoginFields').style.display='none';
-}
-else {
-  intro.textContent='학생은 번호(1~16,18~29), 선생님은 teacher를 입력해 로그인하세요.';
+// ==========================================
+// Firebase 초기화
+// ==========================================
+
+if (!configured) {
+  intro.textContent =
+    'Firebase 설정값이 없습니다. 체험 모드로 실행할 수 있습니다.';
+
+  document.getElementById('cloudLoginFields').style.display = 'none';
+} else {
+  intro.textContent =
+    '학생은 자신의 번호를, 선생님은 teacher를 입력하세요.';
 
   try {
-    app=initializeApp(config);
-    auth=getAuth(app);
-    db=getFirestore(app);
+    app = initializeApp(config);
+    auth = getAuth(app);
+    db = getFirestore(app);
 
-    onAuthStateChanged(auth,async(user)=>{
+    onAuthStateChanged(auth, async (user) => {
       stop();
-      activeUser=user;
 
-      if(!user){
+      activeUser = user;
+
+      if (!user) {
         showGate('학생 번호 또는 teacher 계정으로 로그인하세요.');
         return;
       }
 
-      try{
-        const snap=await getDoc(doc(db,'accounts',user.uid));
+      try {
+        const accountRef = doc(db, 'accounts', user.uid);
+        const snapshot = await getDoc(accountRef);
 
-        if(!snap.exists()){
-          throw Error('이 계정에 학급 권한이 없어. 계정 생성 도구를 확인해 줘.');
+        if (!snapshot.exists()) {
+          throw new Error(
+            'Firestore accounts에 계정 권한이 등록되지 않았습니다.'
+          );
         }
 
-        const acc=snap.data();
+        const account = snapshot.data();
 
-        if(!['teacher','student'].includes(acc.role)){
-          throw Error('계정 권한이 올바르지 않아.');
+        if (!['teacher', 'student'].includes(account.role)) {
+          throw new Error('계정 역할이 올바르지 않습니다.');
         }
 
-        if(
-          acc.role==='student'&&
+        if (
+          account.role === 'student' &&
           (
-            !Number.isInteger(acc.studentId)||
-            acc.studentId<1||
-            acc.studentId>29||
-            acc.studentId===17
+            !Number.isInteger(account.studentId) ||
+            account.studentId < 1 ||
+            account.studentId > 29 ||
+            account.studentId === 17
           )
-        ){
-          throw Error('학생 번호 정보가 잘못됐어.');
+        ) {
+          throw new Error('학생 번호 정보가 올바르지 않습니다.');
         }
 
-        activeAccount=acc;
-        cloud.active=true;
-        cloud.role=acc.role;
-        cloud.studentId=acc.role==='student'?acc.studentId:null;
+        activeAccount = account;
 
-        document.body.classList.toggle('cloudStudent',acc.role==='student');
-        document.body.classList.toggle('cloudTeacher',acc.role==='teacher');
+        cloud.active = true;
+        cloud.role = account.role;
 
-        window.__v7Apply?.('account',{
-          studentId:acc.role==='student'?acc.studentId:1
+        cloud.studentId =
+          account.role === 'student'
+            ? account.studentId
+            : null;
+
+        document.body.classList.toggle(
+          'cloudStudent',
+          account.role === 'student'
+        );
+
+        document.body.classList.toggle(
+          'cloudTeacher',
+          account.role === 'teacher'
+        );
+
+        window.__v7Apply?.('account', {
+          studentId:
+            account.role === 'student'
+              ? account.studentId
+              : 1
         });
 
-        status.style.display='flex';
-        statusText.textContent=acc.role==='teacher'
-          ?'👩🏻‍🏫 교사 · 실시간 연결'
-          :`${acc.studentId}번 학생 · 실시간 연결`;
+        status.style.display = 'flex';
+
+        statusText.textContent =
+          account.role === 'teacher'
+            ? '👩🏻‍🏫 교사 · 실시간 연결'
+            : `${account.studentId}번 학생 · 실시간 연결`;
 
         gate.classList.add('hidden');
-        err.textContent='';
+        err.textContent = '';
+
         subscribe();
 
-      }catch(e){
+      } catch (e) {
         console.error(e);
-        showGate(e?.message||'계정 정보 읽기 실패');
-        err.textContent=e?.message||'학급 접근 권한이 없어';
+
+        showGate(e?.message || '계정 정보 읽기 실패');
+
+        err.textContent =
+          e?.message || '학급 접근 권한이 없습니다.';
       }
     });
 
-  }catch(e){
-    err.textContent='Firebase 초기화 실패: '+e.message;
+  } catch (e) {
     console.error(e);
+
+    err.textContent =
+      'Firebase 초기화 실패: ' + e.message;
   }
 }
 
-loginButton.addEventListener('click',async()=>{
-  if(!auth)return;
+// ==========================================
+// 로그인
+// 실제 계정 형식: teacher@class.com
+// 학생 계정 형식: 1@class.com ~ 29@class.com
+// ==========================================
 
-  const id=inputId.value.trim().toLowerCase();
-  const pass=inputPass.value;
-
-  if(!id||!pass){
-    err.textContent='계정과 비밀번호를 입력해 줘.';
+loginButton.addEventListener('click', async () => {
+  if (!auth) {
+    err.textContent = 'Firebase 연결이 설정되지 않았습니다.';
     return;
   }
 
-  const isTeacher=id==='teacher';
-  const n=Number(id);
+  const id = inputId.value.trim().toLowerCase();
+  const password = inputPass.value;
 
-  if(!isTeacher&&(
-    !Number.isInteger(n)||
-    n<1||
-    n>29||
-    n===17
-  )){
-    err.textContent='학생은 1~16번·18~29번, 선생님은 teacher로 로그인해 줘.';
+  if (!id || !password) {
+    err.textContent = '아이디와 비밀번호를 입력해 주세요.';
     return;
   }
 
-  const email=isTeacher
-    ?'teacher@classroom.example'
-    :`student${String(n).padStart(2,'0')}@classroom.example`;
+  const isTeacher = id === 'teacher';
+  const number = Number(id);
 
-  loginButton.disabled=true;
-  err.textContent='로그인 확인 중…';
-
-  try{
-    await signInWithEmailAndPassword(auth,email,pass);
-    inputPass.value='';
-    err.textContent='';
+  if (
+    !isTeacher &&
+    (
+      !Number.isInteger(number) ||
+      number < 1 ||
+      number > 29 ||
+      number === 17
+    )
+  ) {
+    err.textContent =
+      '학생은 1~16번 또는 18~29번으로 로그인하세요.';
+    return;
   }
-  catch(e){
+
+  // ★ 실제 Firebase 등록 이메일 적용 ★
+  const email = isTeacher
+    ? 'teacher@class.com'
+    : `${number}@class.com`;
+
+  loginButton.disabled = true;
+  err.textContent = '로그인 확인 중...';
+
+  try {
+    await signInWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+
+    inputPass.value = '';
+    err.textContent = '';
+
+  } catch (e) {
     console.error(e);
-    err.textContent='로그인 실패: 계정 또는 비밀번호를 확인해 줘. ('+(e?.code||'error')+')';
-  }
-  finally{
-    loginButton.disabled=false;
+
+    err.textContent =
+      '로그인 실패: ' +
+      (e?.code || e?.message || '알 수 없는 오류');
+
+  } finally {
+    loginButton.disabled = false;
   }
 });
 
-inputPass.addEventListener('keydown',e=>{
-  if(e.key==='Enter')loginButton.click();
+// 엔터키로 로그인
+inputPass.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    loginButton.click();
+  }
 });
 
-logoutButton.addEventListener('click',async()=>{
-  if(auth){
-    try{
-      await signOut(auth);
-    }catch(e){
+// ==========================================
+// 로그아웃
+// ==========================================
+
+logoutButton.addEventListener('click', async () => {
+  if (!auth) {
+    showGate();
+    return;
+  }
+
+  try {
+    await signOut(auth);
+  } catch (e) {
+    fail(e);
+  }
+});
+
+// ==========================================
+// Firestore 실시간 동기화
+// ==========================================
+
+function watch(ref, callback) {
+  const unsubscribe = onSnapshot(
+    ref,
+    callback,
+    (e) => {
+      console.error('실시간 동기화 오류:', e);
       fail(e);
     }
-  }else{
-    showGate();
-  }
-});
-
-function watch(ref,cb){
-  unsubs.push(
-    onSnapshot(ref,cb,e=>{
-      console.error('실시간 구독 오류',e);
-      fail(e);
-    })
   );
+
+  unsubs.push(unsubscribe);
 }
 
-function subscribe(){
+function subscribe() {
+  // 마을 정보
   watch(
-    doc(db,root,'world','state'),
-    s=>window.__v7Apply?.(
-      'world',
-      s.exists()?s.data():{townXP:0}
-    )
+    doc(db, root, 'world', 'state'),
+    (snapshot) => {
+      window.__v7Apply?.(
+        'world',
+        snapshot.exists()
+          ? snapshot.data()
+          : { townXP: 0 }
+      );
+    }
   );
 
+  // 학생 정보
   watch(
-    collection(db,root,'students'),
-    q=>window.__v7Apply?.(
-      'students',
-      q.docs.map(d=>d.data())
-    )
+    collection(db, root, 'students'),
+    (snapshot) => {
+      window.__v7Apply?.(
+        'students',
+        snapshot.docs.map(d => d.data())
+      );
+    }
   );
 
+  // 미션 정보
   watch(
-    collection(db,root,'missions'),
-    q=>window.__v7Apply?.(
-      'missions',
-      q.docs.map(d=>({id:d.id,...d.data()}))
-        .sort((a,b)=>a.id.localeCompare(b.id))
-    )
+    collection(db, root, 'missions'),
+    (snapshot) => {
+      const missions = snapshot.docs
+        .map(d => ({
+          id: d.id,
+          ...d.data()
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+
+      window.__v7Apply?.('missions', missions);
+    }
   );
 
-  const subCol=collection(db,root,'submissions');
-  const logCol=collection(db,root,'studyLogs');
+  const submissionsRef = collection(db, root, 'submissions');
+  const studyRef = collection(db, root, 'studyLogs');
 
+  // 미션 제출 기록
   watch(
-    cloud.role==='teacher'
-      ?subCol
-      :query(subCol,where('studentId','==',cloud.studentId)),
-    q=>window.__v7Apply?.(
-      'submissions',
-      q.docs.map(d=>({id:d.id,...d.data()}))
-        .sort((a,b)=>(a.date||'').localeCompare(b.date||''))
-    )
+    cloud.role === 'teacher'
+      ? submissionsRef
+      : query(
+          submissionsRef,
+          where('studentId', '==', cloud.studentId)
+        ),
+    (snapshot) => {
+      const submissions = snapshot.docs
+        .map(d => ({
+          id: d.id,
+          ...d.data()
+        }))
+        .sort((a, b) =>
+          (a.date || '').localeCompare(b.date || '')
+        );
+
+      window.__v7Apply?.('submissions', submissions);
+    }
   );
 
+  // 공부 기록
   watch(
-    cloud.role==='teacher'
-      ?logCol
-      :query(logCol,where('studentId','==',cloud.studentId)),
-    q=>window.__v7Apply?.(
-      'studyLogs',
-      q.docs.map(d=>({id:d.id,...d.data()}))
-        .sort((a,b)=>(a.date||'').localeCompare(b.date||''))
-    )
+    cloud.role === 'teacher'
+      ? studyRef
+      : query(
+          studyRef,
+          where('studentId', '==', cloud.studentId)
+        ),
+    (snapshot) => {
+      const records = snapshot.docs
+        .map(d => ({
+          id: d.id,
+          ...d.data()
+        }))
+        .sort((a, b) =>
+          (a.date || '').localeCompare(b.date || '')
+        );
+
+      window.__v7Apply?.('studyLogs', records);
+    }
   );
 
-  if(cloud.role==='teacher'){
+  // 교사 전용 XP 지급 기록
+  if (cloud.role === 'teacher') {
     watch(
-      collection(db,root,'events'),
-      q=>window.__v7Apply?.(
-        'events',
-        q.docs.map(d=>({id:d.id,...d.data()}))
-          .sort((a,b)=>(a.date||'').localeCompare(b.date||''))
-      )
+      collection(db, root, 'events'),
+      (snapshot) => {
+        const events = snapshot.docs
+          .map(d => ({
+            id: d.id,
+            ...d.data()
+          }))
+          .sort((a, b) =>
+            (a.date || '').localeCompare(b.date || '')
+          );
+
+        window.__v7Apply?.('events', events);
+      }
     );
   }
 }
 
-const timestamp=()=>new Date().toLocaleString('ko-KR');
+const timestamp = () =>
+  new Date().toLocaleString('ko-KR');
 
-function teacher(){
-  if(!cloud.active||cloud.role!=='teacher'){
-    notify('선생님 계정에서만 가능한 기능이야');
+// ==========================================
+// 교사 권한 확인
+// ==========================================
+
+function teacher() {
+  if (!cloud.active || cloud.role !== 'teacher') {
+    notify('선생님 계정에서만 사용할 수 있습니다.');
     return false;
   }
+
   return true;
 }
 
-async function submit(mid,detail){
-  if(!cloud.active||cloud.role!=='student'){
-    notify('학생 계정으로 로그인해야 제출할 수 있어');
+// ==========================================
+// 학생 미션 제출
+// ==========================================
+
+async function submit(missionId, detail) {
+  if (!cloud.active || cloud.role !== 'student') {
+    notify('학생 계정으로 로그인해야 합니다.');
     return;
   }
 
-  detail=String(detail||'').trim();
+  detail = String(detail || '').trim();
 
-  if(detail.length<3||detail.length>250){
-    notify('활동 내용은 3~250자로 입력해 줘');
+  if (detail.length < 3 || detail.length > 250) {
+    notify('활동 내용은 3~250자로 입력해 주세요.');
     return;
   }
 
-  try{
-    const mission=await getDoc(doc(db,root,'missions',mid));
-
-    if(!mission.exists()||!mission.data().active){
-      throw Error('현재 운영 중인 미션이 아니야');
-    }
-
-    const ref=doc(
-      db,root,'submissions',
-      `${activeUser.uid}_${mid}`
+  try {
+    const missionSnapshot = await getDoc(
+      doc(db, root, 'missions', missionId)
     );
 
-    await runTransaction(db,async(tx)=>{
-      const old=await tx.get(ref);
+    if (
+      !missionSnapshot.exists() ||
+      !missionSnapshot.data().active
+    ) {
+      throw new Error('현재 운영 중인 미션이 아닙니다.');
+    }
 
-      if(old.exists()&&old.data().status!=='rejected'){
-        throw Error('이미 신청하거나 승인받은 미션이야');
+    const submissionRef = doc(
+      db,
+      root,
+      'submissions',
+      `${activeUser.uid}_${missionId}`
+    );
+
+    await runTransaction(db, async (tx) => {
+      const existing = await tx.get(submissionRef);
+
+      if (
+        existing.exists() &&
+        existing.data().status !== 'rejected'
+      ) {
+        throw new Error('이미 신청하거나 승인받은 미션입니다.');
       }
 
-      const data={
-        ownerUid:activeUser.uid,
-        studentId:cloud.studentId,
-        missionId:mid,
-        detail,
-        status:'pending',
-        date:timestamp()
-      };
+      const date = timestamp();
 
-      if(old.exists()){
-        tx.update(ref,{
+      if (existing.exists()) {
+        tx.update(submissionRef, {
           detail,
-          status:'pending',
-          date:timestamp()
+          status: 'pending',
+          date
         });
-      }else{
-        tx.set(ref,data);
+      } else {
+        tx.set(submissionRef, {
+          ownerUid: activeUser.uid,
+          studentId: cloud.studentId,
+          missionId,
+          detail,
+          status: 'pending',
+          date
+        });
       }
     });
 
-    notify('📨 제출했어! 선생님 승인을 기다려 줘.');
+    notify('📨 미션 제출 완료! 선생님 승인을 기다려 주세요.');
 
-  }catch(e){
+  } catch (e) {
     fail(e);
   }
 }
 
-async function approve(sid,decision){
-  if(!teacher())return;
-  if(!['approved','rejected'].includes(decision))return;
+// ==========================================
+// 교사 미션 승인 및 반려
+// ==========================================
 
-  try{
-    const subRef=doc(db,root,'submissions',sid);
-    const worldRef=doc(db,root,'world','state');
+async function approve(submissionId, decision) {
+  if (!teacher()) return;
 
-    await runTransaction(db,async(tx)=>{
-      const subSnap=await tx.get(subRef);
+  if (!['approved', 'rejected'].includes(decision)) {
+    return;
+  }
 
-      if(!subSnap.exists()||subSnap.data().status!=='pending'){
-        throw Error('이미 처리된 미션이야');
+  try {
+    const submissionRef = doc(
+      db,
+      root,
+      'submissions',
+      submissionId
+    );
+
+    const worldRef = doc(
+      db,
+      root,
+      'world',
+      'state'
+    );
+
+    await runTransaction(db, async (tx) => {
+      const submissionSnapshot = await tx.get(submissionRef);
+
+      if (
+        !submissionSnapshot.exists() ||
+        submissionSnapshot.data().status !== 'pending'
+      ) {
+        throw new Error('이미 처리된 미션입니다.');
       }
 
-      const sub=subSnap.data();
-      const missionRef=doc(db,root,'missions',sub.missionId);
-      const stuRef=doc(db,root,'students',String(sub.studentId));
+      const submission = submissionSnapshot.data();
 
-      const missionSnap=await tx.get(missionRef);
+      const missionRef = doc(
+        db,
+        root,
+        'missions',
+        submission.missionId
+      );
 
-      if(!missionSnap.exists()){
-        throw Error('등록된 미션을 찾을 수 없어');
+      const studentRef = doc(
+        db,
+        root,
+        'students',
+        String(submission.studentId)
+      );
+
+      const missionSnapshot = await tx.get(missionRef);
+
+      if (!missionSnapshot.exists()) {
+        throw new Error('미션 정보를 찾을 수 없습니다.');
       }
 
-      const xp=Number(missionSnap.data().xp)||0;
+      const xp = Number(missionSnapshot.data().xp) || 0;
 
-      let stuSnap,worldSnap;
+      let studentSnapshot;
+      let worldSnapshot;
 
-      if(decision==='approved'){
-        stuSnap=await tx.get(stuRef);
-        worldSnap=await tx.get(worldRef);
+      if (decision === 'approved') {
+        studentSnapshot = await tx.get(studentRef);
+        worldSnapshot = await tx.get(worldRef);
 
-        if(!stuSnap.exists()){
-          throw Error('학생 프로필을 찾지 못했어');
+        if (!studentSnapshot.exists()) {
+          throw new Error('학생 프로필을 찾을 수 없습니다.');
         }
       }
 
-      tx.update(subRef,{
-        status:decision,
-        reviewed:timestamp(),
-        reviewedBy:activeUser.uid
+      tx.update(submissionRef, {
+        status: decision,
+        reviewed: timestamp(),
+        reviewedBy: activeUser.uid
       });
 
-      if(decision==='approved'){
-        const profile=stuSnap.data();
-        let level=Math.max(1,Number(profile.level)||1);
-        let remain=(Number(profile.xp)||0)+xp;
+      if (decision === 'approved') {
+        const profile = studentSnapshot.data();
 
-        while(level<99&&remain>=60+18*level){
-          remain-=60+18*level;
+        let level = Math.max(
+          1,
+          Number(profile.level) || 1
+        );
+
+        let remainingXP =
+          (Number(profile.xp) || 0) + xp;
+
+        while (
+          level < 99 &&
+          remainingXP >= 60 + 18 * level
+        ) {
+          remainingXP -= 60 + 18 * level;
           level++;
         }
 
-        tx.update(stuRef,{level,xp:remain});
+        tx.update(studentRef, {
+          level,
+          xp: remainingXP
+        });
 
-        tx.set(worldRef,{
-          townXP:(
-            Number(
-              worldSnap.exists()
-                ?worldSnap.data().townXP
-                :0
-            )||0
-          )+xp
-        },{merge:true});
+        const oldTownXP = worldSnapshot.exists()
+          ? Number(worldSnapshot.data().townXP) || 0
+          : 0;
 
-        const eventRef=doc(collection(db,root,'events'));
+        tx.set(
+          worldRef,
+          {
+            townXP: oldTownXP + xp
+          },
+          { merge: true }
+        );
 
-        tx.set(eventRef,{
-          studentId:sub.studentId,
-          amount:xp,
-          reason:'미션 승인: '+missionSnap.data().name,
-          date:timestamp(),
-          teacherUid:activeUser.uid
+        const eventRef = doc(
+          collection(db, root, 'events')
+        );
+
+        tx.set(eventRef, {
+          studentId: submission.studentId,
+          amount: xp,
+          reason: '미션 승인: ' + missionSnapshot.data().name,
+          date: timestamp(),
+          teacherUid: activeUser.uid
         });
       }
     });
 
     notify(
-      decision==='approved'
-        ?'✅ 승인 및 XP 지급 완료'
-        :'↩️ 반려 완료'
+      decision === 'approved'
+        ? '✅ 미션 승인 및 경험치 지급 완료'
+        : '↩️ 미션 반려 완료'
     );
 
-  }catch(e){
+  } catch (e) {
     fail(e);
   }
 }
 
-async function saveStudy(id,subject,minutes,note){
-  if(!cloud.active||cloud.role!=='student'||id!==cloud.studentId){
-    notify('내 공부 기록만 작성할 수 있어');
+// ==========================================
+// 학생 공부 기록
+// ==========================================
+
+async function saveStudy(id, subject, minutes, note) {
+  if (
+    !cloud.active ||
+    cloud.role !== 'student' ||
+    id !== cloud.studentId
+  ) {
+    notify('본인의 공부 기록만 작성할 수 있습니다.');
     return;
   }
 
-  if(
-    !['과학','국어','수학','영어','사회','기타'].includes(subject)||
-    !Number.isInteger(minutes)||
-    minutes<1||
-    minutes>240||
-    String(note).length>100
-  ){
-    notify('입력값을 확인해 줘');
+  const subjects = [
+    '과학',
+    '국어',
+    '수학',
+    '영어',
+    '사회',
+    '기타'
+  ];
+
+  if (
+    !subjects.includes(subject) ||
+    !Number.isInteger(minutes) ||
+    minutes < 1 ||
+    minutes > 240 ||
+    String(note).length > 100
+  ) {
+    notify('공부 기록 입력값을 확인해 주세요.');
     return;
   }
 
-  try{
+  try {
     await addDoc(
-      collection(db,root,'studyLogs'),
+      collection(db, root, 'studyLogs'),
       {
-        ownerUid:activeUser.uid,
-        studentId:id,
+        ownerUid: activeUser.uid,
+        studentId: id,
         subject,
         minutes,
-        note:String(note),
-        date:timestamp()
+        note: String(note),
+        date: timestamp()
       }
     );
 
     notify('📚 공부 기록 저장 완료');
 
-  }catch(e){
+  } catch (e) {
     fail(e);
   }
 }
 
-async function createMission(name,desc,xp){
-  if(!teacher())return;
+// ==========================================
+// 교사 미션 생성
+// ==========================================
 
-  name=String(name).trim();
-  desc=String(desc).trim();
+async function createMission(name, desc, xp) {
+  if (!teacher()) return;
 
-  if(
-    name.length<2||
-    name.length>40||
-    desc.length>150||
-    !Number.isInteger(xp)||
-    xp<1||
-    xp>100
-  ){
-    return notify('미션 입력값을 확인해 줘');
+  name = String(name).trim();
+  desc = String(desc).trim();
+
+  if (
+    name.length < 2 ||
+    name.length > 40 ||
+    desc.length > 150 ||
+    !Number.isInteger(xp) ||
+    xp < 1 ||
+    xp > 100
+  ) {
+    notify('미션 입력값을 확인해 주세요.');
+    return;
   }
 
-  try{
+  try {
     await addDoc(
-      collection(db,root,'missions'),
-      {name,desc,xp,active:true}
+      collection(db, root, 'missions'),
+      {
+        name,
+        desc,
+        xp,
+        active: true
+      }
     );
-    notify('✅ 새 미션 등록 완료');
-  }catch(e){
+
+    notify('✅ 새로운 미션이 등록됐습니다.');
+
+  } catch (e) {
     fail(e);
   }
 }
 
-async function toggleMission(id,active){
-  if(!teacher())return;
+// ==========================================
+// 교사 미션 활성화 / 종료
+// ==========================================
 
-  try{
+async function toggleMission(id, active) {
+  if (!teacher()) return;
+
+  try {
     await updateDoc(
-      doc(db,root,'missions',id),
-      {active:!!active}
+      doc(db, root, 'missions', id),
+      { active: !!active }
     );
 
-    notify(active?'▶️ 미션 재개':'⏸ 미션 종료');
-  }catch(e){
+    notify(
+      active
+        ? '▶️ 미션 다시 시작'
+        : '⏸ 미션 종료'
+    );
+
+  } catch (e) {
     fail(e);
   }
 }
 
-async function setHonor(id,title){
-  if(!teacher())return;
+// ==========================================
+// 학생 칭호 수여
+// ==========================================
 
-  id=Number(id);
-  title=String(title||'').trim();
+async function setHonor(id, title) {
+  if (!teacher()) return;
 
-  if(id<1||id>29||id===17||title.length>22){
-    return notify('칭호는 22자 이내로 입력해 줘');
+  id = Number(id);
+  title = String(title || '').trim();
+
+  if (
+    id < 1 ||
+    id > 29 ||
+    id === 17 ||
+    title.length > 22
+  ) {
+    notify('학생 번호 또는 칭호를 확인해 주세요.');
+    return;
   }
 
-  try{
+  try {
     await updateDoc(
-      doc(db,root,'students',String(id)),
-      {title}
+      doc(db, root, 'students', String(id)),
+      { title }
     );
 
     notify(
       title
-        ?`🏅 ${id}번 칭호 수여 완료`
-        :'칭호 삭제 완료'
+        ? `🏅 ${id}번 학생에게 칭호를 수여했습니다.`
+        : '칭호가 삭제됐습니다.'
     );
-  }catch(e){
+
+  } catch (e) {
     fail(e);
   }
 }
 
-async function setLevel(id,val){
-  if(!teacher())return;
+// ==========================================
+// 학생 레벨 변경
+// ==========================================
 
-  id=Number(id);
-  const level=Math.max(
+async function setLevel(id, value) {
+  if (!teacher()) return;
+
+  id = Number(id);
+
+  const level = Math.max(
     1,
-    Math.min(99,Math.round(Number(val)||1))
+    Math.min(
+      99,
+      Math.round(Number(value) || 1)
+    )
   );
 
-  if(id<1||id>29||id===17)return;
+  if (
+    id < 1 ||
+    id > 29 ||
+    id === 17
+  ) {
+    return;
+  }
 
-  try{
+  try {
     await updateDoc(
-      doc(db,root,'students',String(id)),
-      {level,xp:0}
+      doc(db, root, 'students', String(id)),
+      {
+        level,
+        xp: 0
+      }
     );
 
-    notify(`✨ ${id}번 Lv.${level} 적용`);
-  }catch(e){
+    notify(`✨ ${id}번 학생 Lv.${level} 적용 완료`);
+
+  } catch (e) {
     fail(e);
   }
 }
 
-async function grantXP(id,amount,reason){
-  if(!teacher())return;
+// ==========================================
+// 교사 경험치 직접 지급
+// ==========================================
 
-  id=Number(id);
-  amount=Number(amount);
+async function grantXP(id, amount, reason) {
+  if (!teacher()) return;
 
-  if(
-    !(id>=1&&id<=29&&id!==17)||
-    !Number.isInteger(amount)||
-    amount<1||
-    amount>500
-  ){
-    return notify('지급 값이 올바르지 않아');
+  id = Number(id);
+  amount = Number(amount);
+
+  if (
+    !(id >= 1 && id <= 29 && id !== 17) ||
+    !Number.isInteger(amount) ||
+    amount < 1 ||
+    amount > 500
+  ) {
+    notify('경험치 지급값을 확인해 주세요.');
+    return;
   }
 
-  try{
-    const stuRef=doc(db,root,'students',String(id));
-    const worldRef=doc(db,root,'world','state');
+  try {
+    const studentRef = doc(
+      db,
+      root,
+      'students',
+      String(id)
+    );
 
-    await runTransaction(db,async(tx)=>{
-      const s=await tx.get(stuRef);
-      const w=await tx.get(worldRef);
+    const worldRef = doc(
+      db,
+      root,
+      'world',
+      'state'
+    );
 
-      if(!s.exists()){
-        throw Error('학생이 없어');
+    await runTransaction(db, async (tx) => {
+      const studentSnapshot = await tx.get(studentRef);
+      const worldSnapshot = await tx.get(worldRef);
+
+      if (!studentSnapshot.exists()) {
+        throw new Error('학생 프로필을 찾을 수 없습니다.');
       }
 
-      let level=Number(s.data().level)||1;
-      let xp=(Number(s.data().xp)||0)+amount;
+      let level =
+        Number(studentSnapshot.data().level) || 1;
 
-      while(level<99&&xp>=60+18*level){
-        xp-=60+18*level;
+      let xp =
+        (Number(studentSnapshot.data().xp) || 0) +
+        amount;
+
+      while (
+        level < 99 &&
+        xp >= 60 + 18 * level
+      ) {
+        xp -= 60 + 18 * level;
         level++;
       }
 
-      tx.update(stuRef,{level,xp});
+      tx.update(studentRef, {
+        level,
+        xp
+      });
 
-      tx.set(worldRef,{
-        townXP:(
-          Number(w.exists()?w.data().townXP:0)||0
-        )+amount
-      },{merge:true});
+      const oldTownXP = worldSnapshot.exists()
+        ? Number(worldSnapshot.data().townXP) || 0
+        : 0;
 
       tx.set(
-        doc(collection(db,root,'events')),
+        worldRef,
         {
-          studentId:id,
-          amount,
-          reason:String(reason||'교사 보상').slice(0,100),
-          date:timestamp(),
-          teacherUid:activeUser.uid
-        }
+          townXP: oldTownXP + amount
+        },
+        { merge: true }
       );
+
+      const eventRef = doc(
+        collection(db, root, 'events')
+      );
+
+      tx.set(eventRef, {
+        studentId: id,
+        amount,
+        reason: String(reason || '교사 보상').slice(0, 100),
+        date: timestamp(),
+        teacherUid: activeUser.uid
+      });
     });
 
-    notify(`✅ ${id}번 +${amount} XP`);
+    notify(`✅ ${id}번 학생 +${amount} XP 지급 완료`);
 
-  }catch(e){
+  } catch (e) {
     fail(e);
   }
 }
 
-// v9: 교사 전용 학급 초기설정
-// 이미 존재하는 학생/미션/마을 데이터는 덮어쓰지 않음
+// ==========================================
+// v9 학급 초기설정
+// 없는 학생 / 미션 / 마을 문서만 생성
+// ==========================================
 
-async function initializeClass(){
-  if(!teacher())return null;
+async function initializeClass() {
+  if (!teacher()) return null;
 
-  if(!confirm(
-    '교사 전용 초기설정\n\n'+
-    '기존 학생 레벨·XP·칭호는 그대로 두고, '+ 
-    '없는 학생 프로필과 기본 미션/마을 문서만 생성할까요?'
-  )){
-    return null;
-  }
+  const yes = confirm(
+    '교사 전용 학급 초기설정\n\n' +
+    '기존 학생 레벨, XP, 칭호는 유지합니다.\n' +
+    '없는 학생 프로필과 기본 미션만 생성할까요?'
+  );
 
-  const ids=[
-    ...Array.from({length:16},(_,i)=>i+1),
-    ...Array.from({length:12},(_,i)=>i+18)
+  if (!yes) return null;
+
+  const studentIds = [
+    ...Array.from(
+      { length: 16 },
+      (_, i) => i + 1
+    ),
+    ...Array.from(
+      { length: 12 },
+      (_, i) => i + 18
+    )
   ];
 
-  try{
+  try {
     const [
       existingStudents,
       existingMissions,
       existingWorld
-    ]=await Promise.all([
-      getDocs(collection(db,root,'students')),
-      getDocs(collection(db,root,'missions')),
-      getDoc(doc(db,root,'world','state'))
+    ] = await Promise.all([
+      getDocs(collection(db, root, 'students')),
+      getDocs(collection(db, root, 'missions')),
+      getDoc(doc(db, root, 'world', 'state'))
     ]);
 
-    const studentIds=new Set(
-      existingStudents.docs.map(d=>d.id)
+    const savedStudentIds = new Set(
+      existingStudents.docs.map(d => d.id)
     );
 
-    const missionIds=new Set(
-      existingMissions.docs.map(d=>d.id)
+    const savedMissionIds = new Set(
+      existingMissions.docs.map(d => d.id)
     );
 
-    const defaults=[
+    const defaultMissions = [
       [
         'm1',
         '아침 독서 10분',
@@ -697,22 +1065,23 @@ async function initializeClass(){
       ]
     ];
 
-    const batch=writeBatch(db);
+    const batch = writeBatch(db);
 
-    let studentsCreated=0;
-    let missionsCreated=0;
-    let worldCreated=0;
+    let studentsCreated = 0;
+    let missionsCreated = 0;
+    let worldCreated = 0;
 
-    for(const id of ids){
-      if(!studentIds.has(String(id))){
+    // 학생 프로필 28명
+    for (const id of studentIds) {
+      if (!savedStudentIds.has(String(id))) {
         batch.set(
-          doc(db,root,'students',String(id)),
+          doc(db, root, 'students', String(id)),
           {
-            number:id,
-            nickname:`${id}번 주민`,
-            level:1,
-            xp:0,
-            title:''
+            number: id,
+            nickname: `${id}번 주민`,
+            level: 1,
+            xp: 0,
+            title: ''
           }
         );
 
@@ -720,15 +1089,19 @@ async function initializeClass(){
       }
     }
 
-    for(const [id,name,desc,xp] of defaults){
-      if(!missionIds.has(id)){
+    // 기본 미션 생성
+    for (
+      const [id, name, desc, xp]
+      of defaultMissions
+    ) {
+      if (!savedMissionIds.has(id)) {
         batch.set(
-          doc(db,root,'missions',id),
+          doc(db, root, 'missions', id),
           {
             name,
             desc,
             xp,
-            active:true
+            active: true
           }
         );
 
@@ -736,36 +1109,38 @@ async function initializeClass(){
       }
     }
 
-    if(!existingWorld.exists()){
+    // 마을 공동 XP 초기화
+    if (!existingWorld.exists()) {
       batch.set(
-        doc(db,root,'world','state'),
-        {townXP:0}
+        doc(db, root, 'world', 'state'),
+        {
+          townXP: 0
+        }
       );
 
-      worldCreated=1;
+      worldCreated = 1;
     }
 
-    const changes=
-      studentsCreated+
-      missionsCreated+
+    const changes =
+      studentsCreated +
+      missionsCreated +
       worldCreated;
 
-    if(changes){
+    if (changes > 0) {
       await batch.commit();
     }
 
-    const report=
-      `학생 프로필 ${studentsCreated}개 · `+
-      `미션 ${missionsCreated}개 · `+
+    const report =
+      `학생 ${studentsCreated}명 · ` +
+      `미션 ${missionsCreated}개 · ` +
       `마을 ${worldCreated}개 생성`;
 
-    notify('✅ 초기설정 완료: '+report);
+    notify('✅ 초기설정 완료: ' + report);
 
     alert(
-      '우리 반 Firebase 초기설정 완료!\n\n'+
-      report+
-      '\n\n기존 데이터는 그대로 유지됐습니다.'+
-      '\n이제 1번 학생 계정으로 미션 제출을 시험해 보세요.'
+      '우리 반 초기설정 완료!\n\n' +
+      report +
+      '\n\n기존 데이터는 유지되었습니다.'
     );
 
     return {
@@ -774,20 +1149,24 @@ async function initializeClass(){
       worldCreated
     };
 
-  }catch(e){
+  } catch (e) {
     fail(e);
 
     alert(
-      '초기설정 실패: '+
-      (e?.code||e?.message||'알 수 없는 오류')+
-      '\n\nFirestore 규칙과 교사 계정 역할을 확인해 주세요.'
+      '초기설정 실패\n\n' +
+      (e?.code || e?.message || '알 수 없는 오류') +
+      '\n\n교사 계정 권한과 Firestore 규칙을 확인해 주세요.'
     );
 
     return null;
   }
 }
 
-Object.assign(cloud,{
+// ==========================================
+// 웹앱에서 사용할 기능 등록
+// ==========================================
+
+Object.assign(cloud, {
   submit,
   approve,
   saveStudy,
