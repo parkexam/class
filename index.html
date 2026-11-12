@@ -2633,6 +2633,330 @@ import {
 <script type="module" src="./class-ui.js"></script>
 <script type="module" src="./omok-online.js"></script>
 
+
+<!-- =========================================
+     급식판을 왼쪽 메뉴 탭으로 이동
+     기존 급식 API와 시간표 기능 유지
+========================================= -->
+
+<style>
+  /* 기존 맵 위 급식판은 보이지 않게 처리 */
+  #classMealBoard {
+    display: none !important;
+  }
+
+  /* 급식 팝업 배경 */
+  #mealNavOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99000;
+
+    background: rgba(15, 23, 42, 0.75);
+
+    align-items: center;
+    justify-content: center;
+
+    padding: 15px;
+  }
+
+  #mealNavOverlay[hidden] {
+    display: none !important;
+  }
+
+  #mealNavOverlay:not([hidden]) {
+    display: flex;
+  }
+
+  /* 급식 팝업 본체 */
+  #mealNavPanel {
+    width: min(480px, 96vw);
+    max-height: 88dvh;
+    overflow-y: auto;
+
+    background: #f8fafc;
+    border-radius: 18px;
+
+    padding: 20px;
+
+    box-shadow: 0 25px 70px rgba(0,0,0,.35);
+
+    font-family:
+      Pretendard,
+      system-ui,
+      sans-serif;
+
+    color: #0f172a;
+  }
+
+  #mealNavPanel .meal-popup-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  #mealNavPanel .meal-popup-top h2 {
+    font-size: 21px;
+    font-weight: 850;
+    margin: 0;
+    color: #0f172a;
+  }
+
+  #mealNavClose {
+    background: #e2e8f0;
+    color: #334155;
+
+    border: none;
+    border-radius: 10px;
+
+    padding: 9px 14px;
+    font-size: 17px;
+
+    cursor: pointer;
+  }
+
+  /* 기존 급식판을 팝업 안에 배치 */
+  #mealNavOverlay #classMealBoard,
+  #mealNavOverlay #classMealBoard.mealCompact,
+  #mealNavOverlay #classMealBoard.meal-folded {
+    display: block !important;
+
+    position: static !important;
+
+    left: auto !important;
+    top: auto !important;
+    right: auto !important;
+
+    transform: none !important;
+
+    width: 100% !important;
+    max-width: 100% !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+
+    overflow: visible !important;
+
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 13px !important;
+
+    box-shadow: none !important;
+
+    background: white !important;
+  }
+
+  /* 급식 내용을 항상 펼쳐서 표시 */
+  #mealNavOverlay #classMealBoard .meal-content,
+  #mealNavOverlay #classMealBoard.mealCompact .meal-content,
+  #mealNavOverlay #classMealBoard.meal-folded .meal-content {
+    display: block !important;
+
+    max-height: none !important;
+    overflow: visible !important;
+
+    padding: 15px !important;
+  }
+
+  /* 기존 접기 버튼은 팝업 안에서 불필요 */
+  #mealNavOverlay #mealFoldBtn,
+  #mealNavOverlay #mealToggleNew {
+    display: none !important;
+  }
+
+  /* 기존 급식 제목 표시 */
+  #mealNavOverlay #classMealBoard .meal-head > span {
+    display: inline !important;
+  }
+
+  /* 시간표 버튼 유지 */
+  #mealNavOverlay #openClassTimetable {
+    display: inline-block !important;
+  }
+
+  #mealNavOverlay #classMealBoard .meal-head {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+
+    min-height: 46px;
+    padding: 10px 13px !important;
+  }
+
+  #mealNavOverlay #classMealText {
+    white-space: pre-line;
+    font-size: 14px !important;
+    line-height: 1.9 !important;
+  }
+
+  #mealNavOverlay #classMealDate {
+    font-size: 12px !important;
+    margin-bottom: 12px;
+  }
+
+  @media(max-width:600px) {
+    #mealNavPanel {
+      padding: 15px;
+      width: 96vw;
+      border-radius: 15px;
+    }
+
+    #mealNavPanel .meal-popup-top h2 {
+      font-size: 19px;
+    }
+  }
+</style>
+
+<script>
+(() => {
+  'use strict';
+
+  // 중복 설치 방지
+  if (document.getElementById('mealLeftTab')) {
+    return;
+  }
+
+  // =====================================
+  // 급식 팝업 만들기
+  // =====================================
+
+  const overlay = document.createElement('div');
+
+  overlay.id = 'mealNavOverlay';
+  overlay.hidden = true;
+
+  overlay.innerHTML = `
+    <section id="mealNavPanel"
+             role="dialog"
+             aria-modal="true"
+             aria-label="오늘의 급식">
+
+      <div class="meal-popup-top">
+        <h2>🍱 오늘의 급식</h2>
+
+        <button
+          id="mealNavClose"
+          type="button">
+          ✕
+        </button>
+      </div>
+
+      <div id="mealNavSlot"></div>
+
+    </section>
+  `;
+
+  document.body.appendChild(overlay);
+
+  // =====================================
+  // 왼쪽 메뉴 버튼 만들기
+  // =====================================
+
+  const button = document.createElement('button');
+
+  button.id = 'mealLeftTab';
+  button.className = 'navBtn';
+  button.type = 'button';
+
+  button.innerHTML = '<i>🍱</i> 오늘의 급식';
+
+  // 클릭 시 급식 팝업 열기
+  button.addEventListener('click', e => {
+    e.stopPropagation();
+
+    overlay.hidden = false;
+
+    // 기존 급식 접힘 상태 해제
+    const board = document.getElementById('classMealBoard');
+
+    if (board) {
+      board.classList.remove(
+        'mealCompact',
+        'meal-folded'
+      );
+    }
+  });
+
+  // =====================================
+  // 팝업 닫기
+  // =====================================
+
+  function closeMeal() {
+    overlay.hidden = true;
+  }
+
+  document.getElementById('mealNavClose')
+    .addEventListener('click', closeMeal);
+
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) {
+      closeMeal();
+    }
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !overlay.hidden) {
+      closeMeal();
+    }
+  });
+
+  // =====================================
+  // 기존 급식판을 팝업으로 이동
+  // 기존 이벤트와 API 기능 그대로 유지
+  // =====================================
+
+  function installMealTab() {
+
+    const board =
+      document.getElementById('classMealBoard');
+
+    const nav =
+      document.getElementById('leftNav');
+
+    if (!board || !nav) return false;
+
+    // 기존 급식판을 새 팝업 내부로 이동
+    // 복제하지 않으므로 기존 기능 유지
+    document.getElementById('mealNavSlot')
+      .appendChild(board);
+
+    board.classList.remove(
+      'mealCompact',
+      'meal-folded'
+    );
+
+    // 기존 버튼 제거
+    board.querySelector('#mealFoldBtn')?.remove();
+    board.querySelector('#mealToggleNew')?.remove();
+
+    // 왼쪽 메뉴에 등록
+    nav.appendChild(button);
+
+    return true;
+  }
+
+  // 급식판이 늦게 생성될 경우에도 적용
+  if (!installMealTab()) {
+    let attempts = 0;
+
+    const check = setInterval(() => {
+      attempts++;
+
+      if (installMealTab() || attempts >= 100) {
+        clearInterval(check);
+      }
+    }, 150);
+  }
+
+  console.log('급식판 왼쪽 메뉴 이동 완료');
+
+})();
+</script>
+
+<!-- 급식 메뉴 이동 끝 -->
+
 </body></html>
 
 
