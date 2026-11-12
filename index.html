@@ -536,6 +536,89 @@ window.__v7Apply=(kind,payload)=>{
    // Clear previously downloaded classroom records from memory before exposing demo mode.
    v6=v6Seed();
    honorData={titles:{},levels:{},growth:{},logs:[]};
+/* 교사 전용 캐릭터 및 화면 분리 */
+
+// 교사는 학생 번호 0을 화면 내부의 전용 식별값으로 사용
+// 실제 학생 계정이나 Firestore 데이터는 변경하지 않음
+const originalApply = window.__v7Apply;
+
+window.__v7Apply = function(kind, payload) {
+  if (kind === 'account' &&
+      window.ClassCloud?.role === 'teacher') {
+
+    originalApply(kind, payload);
+
+    // 교사는 1번 학생 대신 전용 캐릭터 사용
+    state.chosen = 0;
+    state.lv = 1;
+    state.xp = 0;
+
+    player.x = 740;
+    player.y = 570;
+
+    updateUI();
+    return;
+  }
+
+  return originalApply(kind, payload);
+};
+
+// 교사 전용 캐릭터 표시
+const originalDrawPerson = drawPerson;
+
+drawPerson = function(n, isPlayer, time) {
+  if (isPlayer &&
+      window.ClassCloud?.role === 'teacher') {
+
+    const bob = Math.sin(time * 5) * 2;
+
+    g.save();
+
+    g.fillStyle = '#4e3b6677';
+    g.beginPath();
+    g.ellipse(n.x, n.y + 3, 28, 7, 0, 0, Math.PI * 2);
+    g.fill();
+
+    drawText(
+      '🧑‍🏫',
+      n.x,
+      n.y - 38 + bob,
+      56,
+      '#ffffff',
+      '#3b3450'
+    );
+
+    rr(n.x - 42, n.y + 8, 84, 22, 9, '#654c84ef');
+
+    drawText(
+      '선생님',
+      n.x,
+      n.y + 22,
+      12,
+      '#ffffff',
+      '#352a49'
+    );
+
+    g.restore();
+    return;
+  }
+
+  return originalDrawPerson(n, isPlayer, time);
+};
+
+// 교사 전용 상단 정보
+const originalUpdateUI = updateUI;
+
+updateUI = function() {
+  originalUpdateUI();
+
+  if (window.ClassCloud?.role === 'teacher') {
+    $('badgeNow').firstChild.textContent = '🧑‍🏫 선생님 · ';
+    $('stageText').textContent = '관리자 · 학급 전체';
+    $('nameStage').textContent = '선생님';
+    $('xpText').textContent = '학생 성장 관리';
+  }
+};
    state={...fresh(),...safeParse('class_village_v2_preview',{})};
    if(!CLASS_IDS.includes(Number(state.chosen)))state.chosen=1;
    updatePlayerFromNpc();updateUI();return;
