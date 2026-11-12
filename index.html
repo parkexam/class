@@ -3888,7 +3888,249 @@ import {
 
 })();
 </script>
+<script>
+(() => {
+  if (window.__finalStudentAvatarPatchV1) return;
+  window.__finalStudentAvatarPatchV1 = true;
 
+  /* -----------------------------
+     1) 왼쪽 중복 메뉴/카드 제거
+  ----------------------------- */
+  function normalizeText(t) {
+    return String(t || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function hideLeftGrowthThings() {
+    const leftNav = document.getElementById('leftNav');
+
+    if (leftNav) {
+      [...leftNav.querySelectorAll('button, .navBtn, a, div')]
+        .forEach(el => {
+          const t = normalizeText(el.textContent);
+
+          if (
+            /학생\s*성장\s*카드/.test(t) ||
+            /캐릭터\s*성장/.test(t) ||
+            /성장\s*도감/.test(t) ||
+            /성장\s*카드/.test(t)
+          ) {
+            el.style.display = 'none';
+          }
+        });
+    }
+
+    /* 혹시 왼쪽에 별도 카드/패널로 뜨는 경우도 숨김 */
+    [...document.querySelectorAll('section, div, aside')]
+      .forEach(el => {
+        const t = normalizeText(el.textContent);
+
+        if (
+          t &&
+          t.length < 40 &&
+          (
+            /학생\s*성장\s*카드/.test(t) ||
+            /캐릭터\s*성장\s*도감/.test(t)
+          )
+        ) {
+          if (
+            el.id !== 'modal' &&
+            el.id !== 'modalContent' &&
+            !el.closest('#modal')
+          ) {
+            el.style.display = 'none';
+          }
+        }
+      });
+  }
+
+  /* -----------------------------
+     2) 학생 데이터 찾기
+  ----------------------------- */
+  function studentNoOf(obj) {
+    return Number(
+      obj?.studentId ??
+      obj?.number ??
+      obj?.no ??
+      obj?.id
+    );
+  }
+
+  function collectStudentObjects() {
+    const arrs = [];
+
+    if (Array.isArray(window?.state?.people)) arrs.push(window.state.people);
+    if (Array.isArray(window?.state?.students)) arrs.push(window.state.students);
+    if (Array.isArray(window?.v6?.students)) arrs.push(window.v6.students);
+    if (Array.isArray(window?.students)) arrs.push(window.students);
+    if (Array.isArray(window?.people)) arrs.push(window.people);
+    if (Array.isArray(window?.classStudents)) arrs.push(window.classStudents);
+
+    const out = [];
+    const seen = new Set();
+
+    for (const arr of arrs) {
+      for (const item of arr) {
+        const n = studentNoOf(item);
+        if (!Number.isInteger(n)) continue;
+        if (n < 1 || n > 29 || n === 17) continue;
+        if (seen.has(item)) continue;
+        seen.add(item);
+        out.push(item);
+      }
+    }
+    return out;
+  }
+
+  function pickStudent(map, candidates) {
+    for (const n of candidates) {
+      if (map.has(n)) return map.get(n);
+    }
+    return null;
+  }
+
+  function setIfExists(obj, keys, value) {
+    if (!obj) return;
+    for (const k of keys) {
+      if (k in obj) obj[k] = value;
+    }
+  }
+
+  function copyIfExists(to, from, keys) {
+    if (!to || !from) return;
+    for (const k of keys) {
+      if (k in to && k in from) {
+        to[k] = from[k];
+      }
+    }
+  }
+
+  function clearPatchAccessory(obj) {
+    if (!obj) return;
+
+    const stringKeys = [
+      'accessory', 'accessories', 'faceAcc', 'faceAccessory',
+      'eyewear', 'eyeWear', 'deco', 'ornament', 'item'
+    ];
+
+    const booleanKeys = [
+      'eyePatch', 'eyepatch', 'patch', 'pinkPatch',
+      'bandage', 'mask', 'blindfold'
+    ];
+
+    for (const k of stringKeys) {
+      if (k in obj && /patch|안대|pink|핑크/i.test(String(obj[k] || ''))) {
+        obj[k] = '';
+      }
+    }
+
+    for (const k of booleanKeys) {
+      if (k in obj) obj[k] = false;
+    }
+  }
+
+  /* -----------------------------
+     3) 아바타 보정
+  ----------------------------- */
+  function patchStudentAvatars() {
+    const students = collectStudentObjects();
+    if (!students.length) return false;
+
+    const map = new Map();
+    students.forEach(s => map.set(studentNoOf(s), s));
+
+    const refClothes =
+      pickStudent(map, [1, 2, 4, 5, 8, 9, 15, 18]) || students[0];
+
+    const refEyes =
+      pickStudent(map, [1, 2, 4, 5, 8, 9, 15, 18]) || students[0];
+
+    /* 10번, 12번 옷 입히기 */
+    [10, 12].forEach(no => {
+      const s = map.get(no);
+      if (!s || !refClothes) return;
+
+      copyIfExists(s, refClothes, [
+        'top', 'shirt', 'coat', 'outer', 'outfit', 'clothes',
+        'wear', 'bodyWear', 'uniform', 'dress',
+        'bottom', 'pants', 'skirt', 'shoes'
+      ]);
+
+      setIfExists(s, [
+        'nude', 'isNude', 'bare', 'isBare', 'noClothes'
+      ], false);
+    });
+
+    /* 23번 크기 줄이기 */
+    {
+      const s = map.get(23);
+      if (s) {
+        setIfExists(s, ['scale', 'avatarScale', 'spriteScale', 'size'], 1);
+        setIfExists(s, ['zoom'], 1);
+      }
+    }
+
+    /* 29번 눈/안대 보정 */
+    {
+      const s = map.get(29);
+      if (s) {
+        copyIfExists(s, refEyes, [
+          'eyes', 'eye', 'eyeType', 'eyeStyle',
+          'pupil', 'iris', 'face', 'faceType'
+        ]);
+
+        clearPatchAccessory(s);
+      }
+    }
+
+    return true;
+  }
+
+  /* -----------------------------
+     4) 다시 그리기
+  ----------------------------- */
+  function rerenderAll() {
+    const fns = [
+      'updateUI',
+      'draw',
+      'render',
+      'renderMap',
+      'drawScene',
+      'renderPeople',
+      'refreshPeople',
+      'syncScene'
+    ];
+
+    for (const name of fns) {
+      if (typeof window[name] === 'function') {
+        try { window[name](); } catch (e) {}
+      }
+    }
+  }
+
+  function runPatch() {
+    hideLeftGrowthThings();
+    patchStudentAvatars();
+    rerenderAll();
+  }
+
+  /* 최초 실행 */
+  setTimeout(runPatch, 200);
+  setTimeout(runPatch, 800);
+  setTimeout(runPatch, 1500);
+
+  /* 화면이 다시 그려질 때도 유지 */
+  const observer = new MutationObserver(() => {
+    hideLeftGrowthThings();
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+
+  console.log('✅ 학생 성장 카드 제거 + 10/12/23/29 캐릭터 보정 완료');
+})();
+</script>
 </body></html>
 
 
