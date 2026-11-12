@@ -1627,3 +1627,485 @@ if (app) {
 </script>
 
 </body></html>
+
+
+<!-- 1학년12반 성장 여행: 화면 정리 + 펫 현황 -->
+<script>
+(() => {
+  'use strict';
+
+  // 1. 제목 변경
+  document.title = '1학년12반 성장 여행';
+
+  const title = document.querySelector('#top .brand h1');
+  if (title) {
+    title.textContent = '🧭 1학년12반 성장 여행';
+  }
+
+  const subtitle = document.querySelector('#top .brand p');
+  if (subtitle) {
+    subtitle.textContent = '28명이 함께 떠나는 성장 여행';
+  }
+
+  const loginTitle = document.querySelector('#cloudBox h2');
+  if (loginTitle) {
+    loginTitle.textContent = '🧭 1학년12반 성장 여행';
+  }
+
+  // 2. 불필요한 화면 요소 숨기기
+  const style = document.createElement('style');
+
+  style.textContent = `
+    /* 하단 환영 메시지와 안내창 제거 */
+    #broadcast,
+    #bottomBar .teacherBubble {
+      display: none !important;
+    }
+
+    /* 학생 계정에서 학급 활동 메뉴 제거 */
+    body.cloudStudent .navBtn[data-open="class"] {
+      display: none !important;
+    }
+
+    /* 펫 현황 디자인 */
+    #modal:has(#petStatusPanel) {
+      width: min(740px, 96vw) !important;
+      max-height: 90dvh !important;
+      overflow-y: auto;
+    }
+
+    #petStatusPanel {
+      font-family: Pretendard, system-ui, sans-serif;
+      color: #263046;
+    }
+
+    #petStatusPanel .pet-hero {
+      background: linear-gradient(135deg,#16243e,#385d8e);
+      border-radius: 16px;
+      padding: 21px;
+      color: white;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+
+    #petStatusPanel .pet-big {
+      font-size: 60px;
+      line-height: 1.1;
+    }
+
+    #petStatusPanel .pet-hero b {
+      font-size: 20px;
+      display: block;
+    }
+
+    #petStatusPanel .pet-hero p {
+      margin: 6px 0 0;
+      color: #dbeafe;
+      font-size: 13px;
+    }
+
+    #petStatusPanel .pet-info {
+      background: #eff6ff;
+      border: 1px solid #cfe1ff;
+      padding: 12px 15px;
+      border-radius: 12px;
+      margin: 12px 0 17px;
+      font-size: 13px;
+      color: #29496d;
+    }
+
+    #petStatusPanel .pet-grid {
+      display: grid;
+      grid-template-columns: repeat(4,minmax(0,1fr));
+      gap: 9px;
+    }
+
+    #petStatusPanel .pet-card {
+      border: 1px solid #dce4ed;
+      border-radius: 13px;
+      padding: 13px 7px;
+      text-align: center;
+      background: white;
+    }
+
+    #petStatusPanel .pet-card.pet-current {
+      border: 2px solid #3b82f6;
+      background: #eff6ff;
+    }
+
+    #petStatusPanel .pet-card.pet-locked {
+      opacity: .55;
+    }
+
+    #petStatusPanel .pet-card .pet-emoji {
+      font-size: 34px;
+      display: block;
+    }
+
+    #petStatusPanel .pet-card b {
+      font-size: 12px;
+      display: block;
+      margin-top: 5px;
+    }
+
+    #petStatusPanel .pet-card small {
+      font-size: 11px;
+      color: #64748b;
+      display: block;
+    }
+
+    #petStatusPanel .pet-head {
+      font-weight: 800;
+      margin: 16px 0 9px;
+      font-size: 15px;
+    }
+
+    #petStatusPanel #petStudentSelect {
+      width: 100%;
+      margin: 0 0 13px;
+      padding: 10px;
+      border: 1px solid #ccd5e1;
+      border-radius: 10px;
+    }
+
+    @media (max-width: 540px) {
+      #petStatusPanel .pet-grid {
+        grid-template-columns: repeat(2,minmax(0,1fr));
+      }
+
+      #petStatusPanel .pet-big {
+        font-size: 48px;
+      }
+
+      #petStatusPanel .pet-hero {
+        padding: 15px;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+
+  // 3. '스페이스: 마을 회관' 안내창 제거
+  // 건물 상호작용 정보는 유지
+  if (typeof drawScene === 'function') {
+    const oldDrawScene = drawScene;
+
+    drawScene = function(t, dt) {
+      const savedNearby = nearby;
+      nearby = null;
+
+      try {
+        return oldDrawScene(t, dt);
+      } finally {
+        nearby = savedNearby;
+      }
+    };
+  }
+
+  // 4. 이주의 성장왕 트로피 및 글씨 제거
+  if (typeof drawTrophy === 'function') {
+    drawTrophy = function() {};
+  }
+
+  // 5. 꾸미기 상점을 펫 현황으로 변경
+  const shopButton = document.querySelector(
+    '.navBtn[data-open="shop"]'
+  );
+
+  if (shopButton) {
+    shopButton.innerHTML = '<i>🐾</i> 펫 현황';
+  }
+
+  // 게임 내 상점 위치도 펫 쉼터로 변경
+  const shopPlace = typeof places !== 'undefined'
+    ? places.find(p => p.id === 'shop')
+    : null;
+
+  if (shopPlace) {
+    shopPlace.name = '🐾 펫 쉼터';
+    shopPlace.sub = '나의 펫 성장 단계를 확인하는 곳';
+  }
+
+  // 6. 캐릭터 레벨별 펫 종류
+  const pets = [
+    {
+      level: 1,
+      icon: '🌱',
+      name: '새싹',
+      desc: '첫 여행을 함께하는 펫'
+    },
+    {
+      level: 20,
+      icon: '🐣',
+      name: '아기 병아리',
+      desc: 'Lv.20에 성장'
+    },
+    {
+      level: 35,
+      icon: '🦉',
+      name: '부엉이',
+      desc: 'Lv.35에 성장'
+    },
+    {
+      level: 50,
+      icon: '🐲',
+      name: '드래곤',
+      desc: 'Lv.50에 성장'
+    }
+  ];
+
+  const validIds = [
+    1,2,3,4,5,6,7,8,
+    9,10,11,12,13,14,15,16,
+    18,19,20,21,22,23,24,25,26,27,28,29
+  ];
+
+  const teacherMode = () =>
+    window.ClassCloud?.active &&
+    window.ClassCloud.role === 'teacher';
+
+  const selectedStudent = () =>
+    window.ClassCloud?.role === 'student'
+      ? Number(window.ClassCloud.studentId)
+      : Number(state.chosen) || 1;
+
+  const safeText = s =>
+    String(s ?? '').replace(/[&<>"']/g, c => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[c]));
+
+  // 7. 펫 현황 화면 생성
+  function petHtml(id) {
+    const lv = Math.max(
+      1,
+      Number(studentLevel(id)) || 1
+    );
+
+    const current = [...pets]
+      .reverse()
+      .find(p => lv >= p.level) || pets[0];
+
+    const next = pets.find(
+      p => p.level > lv
+    );
+
+    const nickname = safeText(
+      v6.students?.[id]?.nickname || `${id}번 학생`
+    );
+
+    return `
+      <div class="pet-hero">
+        <span class="pet-big">${current.icon}</span>
+
+        <div>
+          <b>${nickname}의 펫 · ${current.name}</b>
+          <p>
+            현재 캐릭터 Lv.${lv} · ${current.desc}
+          </p>
+        </div>
+      </div>
+
+      <div class="pet-info">
+        ${
+          next
+            ? `다음 펫 <b>${next.icon} ${next.name}</b>까지
+               <b>${next.level - lv}레벨</b> 남았어요.`
+            : '🎉 최고 단계 드래곤까지 성장했어요!'
+        }
+
+        <div style="margin-top:5px;opacity:.8">
+          펫은 캐릭터 레벨에 따라 자동으로 성장해요.
+          별도 구매나 코인이 필요하지 않아요.
+        </div>
+      </div>
+
+      <div class="pet-head">
+        🐾 펫 성장 도감
+      </div>
+
+      <div class="pet-grid">
+        ${pets.map(p => `
+          <div class="pet-card
+            ${p.level === current.level ? 'pet-current' : ''}
+            ${lv < p.level ? 'pet-locked' : ''}">
+
+            <span class="pet-emoji">
+              ${p.icon}
+            </span>
+
+            <b>${p.name}</b>
+
+            <small>
+              Lv.${p.level}부터
+            </small>
+
+            <small>
+              ${
+                lv < p.level
+                  ? '🔒 잠금'
+                  : p.level === current.level
+                    ? '✅ 현재 펫'
+                    : '✅ 달성'
+              }
+            </small>
+
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  // 8. 펫 탭 실행 함수
+  function openPetStatus() {
+    const currentId = selectedStudent();
+
+    const id = validIds.includes(currentId)
+      ? currentId
+      : 1;
+
+    const teacher = teacherMode();
+
+    // 선생님은 28명 중 학생 선택 가능
+    const teacherSelect = teacher ? `
+      <label for="petStudentSelect"
+        style="display:block;font-weight:800;margin-bottom:7px">
+        학생 선택 (교사 전용)
+      </label>
+
+      <select id="petStudentSelect">
+        ${validIds.map(n => `
+          <option value="${n}" ${n === id ? 'selected' : ''}>
+            ${n}번 학생
+          </option>
+        `).join('')}
+      </select>
+    ` : '';
+
+    openModal(
+      '🐾 나의 펫 현황',
+
+      `
+        <div id="petStatusPanel">
+          ${teacherSelect}
+
+          <div id="petStatusContent">
+            ${petHtml(id)}
+          </div>
+        </div>
+      `,
+
+      root => {
+        const select = root.querySelector(
+          '#petStudentSelect'
+        );
+
+        if (select) {
+          select.addEventListener('change', () => {
+            const n = Number(select.value);
+
+            if (!validIds.includes(n)) return;
+
+            root.querySelector(
+              '#petStatusContent'
+            ).innerHTML = petHtml(n);
+          });
+        }
+      }
+    );
+  }
+
+  // 9. 기존 메뉴 클릭 기능 교체
+  const oldOpenPanel = openPanel;
+
+  openPanel = function(id) {
+
+    // 학생에게 학급 활동 화면 차단
+    if (
+      id === 'class' &&
+      window.ClassCloud?.role === 'student'
+    ) {
+      return;
+    }
+
+    // 꾸미기 상점 대신 펫 현황 표시
+    if (id === 'shop') {
+      return openPetStatus();
+    }
+
+    // 다른 메뉴들은 기존 기능 유지
+    return oldOpenPanel(id);
+  };
+
+  console.log(
+    '1학년12반 성장 여행: 화면 정리 및 펫 현황 적용'
+  );
+
+})();
+</script>
+<!-- 화면 정리 코드 끝 -->
+
+<!-- 학급 공지사항: 교실 칠판 위치로 이동 -->
+<style>
+  #journeyNotice {
+    /* 왼쪽 위 칠판 위치 */
+    position: absolute !important;
+    left: 42px !important;
+    top: 105px !important;
+
+    /* 가운데 정렬 해제 */
+    transform: none !important;
+
+    /* 칠판 크기에 맞춤 */
+    width: 305px !important;
+    max-width: calc(100vw - 55px) !important;
+    max-height: 160px !important;
+
+    z-index: 7 !important;
+    overflow: hidden !important;
+  }
+
+  /* 공지사항 내용 */
+  #journeyNotice .j-content {
+    max-height: 82px !important;
+    overflow-y: auto !important;
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+    line-height: 1.45 !important;
+  }
+
+  /* 공지 제목 */
+  #journeyNotice .j-head {
+    padding: 7px 10px !important;
+  }
+
+  /* 수정 시간 */
+  #journeyNotice .j-time {
+    font-size: 10px !important;
+    margin: 3px 10px 7px !important;
+  }
+
+  /* 휴대폰 화면 */
+  @media (max-width: 650px) {
+    #journeyNotice {
+      left: 45px !important;
+      top: 105px !important;
+      width: min(280px, calc(100vw - 60px)) !important;
+      max-height: 150px !important;
+    }
+
+    #journeyNotice .j-content {
+      max-height: 72px !important;
+      font-size: 11px !important;
+    }
+  }
+</style>
+<!-- 공지사항 위치 수정 끝 -->
+
+
+
