@@ -2157,6 +2157,479 @@ if (app) {
 </script>
 <!-- 급식 및 시간표 코드 끝 -->
 
+<!-- Firebase 칭찬 및 하트 시스템 -->
+<script type="module">
+import {getApps}
+from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
+
+import {getAuth,onAuthStateChanged}
+from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
+
+import {
+  getFirestore,doc,getDoc,collection,query,where,
+  onSnapshot,setDoc,deleteDoc,serverTimestamp
+} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+
+(() => {
+  const app = getApps()[0];
+
+  if (!app) {
+    console.warn('Firebase 초기화가 필요합니다.');
+    return;
+  }
+
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const praiseCol = collection(
+    db,'classrooms','main','praises'
+  );
+
+  const ids = [
+    ...Array.from({length:16},(_,i)=>i+1),
+    ...Array.from({length:12},(_,i)=>i+18)
+  ];
+
+  let account = null;
+  let accountUid = null;
+  let target = 1;
+  let received = [];
+  let unsubscribe = null;
+
+  const $ = id => document.getElementById(id);
+
+  const notify = s =>
+    typeof window.toast === 'function'
+      ? window.toast(s)
+      : alert(s);
+
+  // ==================================
+  // 디자인
+  // ==================================
+
+  const style = document.createElement('style');
+
+  style.textContent = `
+    #modal:has(#livePraises) {
+      width: min(680px,96vw) !important;
+      max-height: 88dvh !important;
+      overflow: auto;
+      background: #f8fafc !important;
+      color: #0f172a !important;
+    }
+
+    #livePraises {
+      font: 14px/1.55 Pretendard,system-ui,sans-serif;
+      color: #0f172a;
+    }
+
+    #livePraises .heartHead {
+      background: linear-gradient(120deg,#172554,#0f172a);
+      padding: 16px;
+      border-radius: 13px;
+      color: white;
+      margin-bottom: 12px;
+    }
+
+    #livePraises .heartHead strong {
+      font-size: 27px;
+      display: block;
+    }
+
+    #livePraises .heartCard {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px;
+      margin: 10px 0;
+    }
+
+    #livePraises label {
+      display: block;
+      font-weight: 750;
+      margin: 9px 0 5px;
+    }
+
+    #livePraises select,
+    #livePraises textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 9px;
+      font: inherit;
+      color: #0f172a;
+      background: white;
+    }
+
+    #livePraises button {
+      border: 0;
+      border-radius: 9px;
+      background: #2563eb;
+      color: white;
+      padding: 10px 14px;
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    #livePraises .praiseItem {
+      padding: 12px 0;
+      border-bottom: 1px solid #e2e8f0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    #livePraises .praiseItem:last-child {
+      border: 0;
+    }
+
+    #livePraises .praiseMeta {
+      color: #64748b;
+      font-size: 11px;
+      margin-bottom: 5px;
+    }
+
+    #livePraises .deletePraise {
+      float: right;
+      background: #fee2e2;
+      color: #9f1239;
+      padding: 5px 8px;
+    }
+
+    #heartBadge {
+      display: inline-block;
+      margin-left: 8px;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #fff0f4;
+      color: #9f1239;
+    }
+  `;
+
+  document.head.appendChild(style);
+
+  // ==================================
+  // 하트 수 표시
+  // ==================================
+
+  function updateHeartBadge() {
+    const button = document.querySelector(
+      '[data-open="praise"]'
+    );
+
+    if (!button) return;
+
+    let badge = $('heartBadge');
+
+    if (!badge) {
+      badge = document.createElement('b');
+      badge.id = 'heartBadge';
+      button.appendChild(badge);
+    }
+
+    badge.textContent =
+      account?.role === 'student'
+        ? `❤️ ${received.length}`
+        : '💗';
+  }
+
+  // ==================================
+  // 받은 칭찬 표시
+  // ==================================
+
+  function renderReceived() {
+    updateHeartBadge();
+
+    if (!$('livePraises')) return;
+
+    $('receivedTotal').textContent =
+      `❤️ ${received.length}개`;
+
+    const list = $('receivedList');
+    list.replaceChildren();
+
+    if (!received.length) {
+      list.textContent = '아직 받은 칭찬이 없어요.';
+      return;
+    }
+
+    for (const praise of received) {
+      const wrap = document.createElement('div');
+      wrap.className = 'praiseItem';
+
+      const meta = document.createElement('div');
+      meta.className = 'praiseMeta';
+
+      const date = praise.createdAt?.toDate?.();
+
+      meta.textContent =
+        `${Number(praise.fromId)||'?'}번 친구 · ` +
+        (date
+          ? date.toLocaleDateString('ko-KR')
+          : '날짜 확인 중');
+
+      const message = document.createElement('div');
+      message.textContent = praise.text || '';
+
+      wrap.append(meta,message);
+
+      // 교사는 부적절한 칭찬을 삭제 가능
+      if (account?.role === 'teacher') {
+        const remove = document.createElement('button');
+        remove.className = 'deletePraise';
+        remove.textContent = '삭제';
+
+        remove.onclick = async () => {
+          if (!confirm('이 칭찬을 삭제할까요?')) return;
+
+          try {
+            await deleteDoc(doc(praiseCol,praise.id));
+            notify('칭찬이 삭제되었습니다.');
+          } catch (e) {
+            console.error(e);
+            notify('삭제 권한을 확인해 주세요.');
+          }
+        };
+
+        wrap.appendChild(remove);
+      }
+
+      list.appendChild(wrap);
+    }
+  }
+
+  // ==================================
+  // Firebase 실시간 구독
+  // ==================================
+
+  function subscribe(targetId) {
+    if (unsubscribe) {
+      unsubscribe();
+      unsubscribe = null;
+    }
+
+    received = [];
+    target = targetId;
+    renderReceived();
+
+    if (!account) return;
+
+    unsubscribe = onSnapshot(
+      query(
+        praiseCol,
+        where('toId','==',targetId)
+      ),
+
+      snapshot => {
+        received = snapshot.docs
+          .map(d=>({id:d.id,...d.data()}))
+          .sort((a,b)=>
+            (b.createdAt?.toMillis?.()||0) -
+            (a.createdAt?.toMillis?.()||0)
+          );
+
+        renderReceived();
+      },
+
+      error => {
+        console.error('칭찬 조회 실패',error);
+
+        if ($('receivedList')) {
+          $('receivedList').textContent =
+            '칭찬을 읽을 수 없습니다. Firebase 규칙을 확인해 주세요.';
+        }
+      }
+    );
+  }
+
+  // ==================================
+  // 칭찬 화면
+  // ==================================
+
+  function openPraise() {
+    if (!account) {
+      notify('Firebase 계정으로 로그인해 주세요.');
+      return;
+    }
+
+    const teacher = account.role === 'teacher';
+    const mine = Number(account.studentId);
+
+    const options = ids
+      .filter(n=>n!==mine)
+      .map(n=>`<option value="${n}">${n}번 학생</option>`)
+      .join('');
+
+    const html = `
+      <div id="livePraises">
+        <div class="heartHead">
+          💌 따뜻한 말 한마디가 쌓이는 곳
+          <strong id="receivedTotal">❤️ 0개</strong>
+          <small>받은 칭찬 하나당 하트 1개</small>
+        </div>
+
+        ${teacher ? `
+          <label for="heartStudent">받은 칭찬 확인할 학생</label>
+          <select id="heartStudent">
+            ${ids.map(n=>`
+              <option value="${n}">${n}번 학생</option>
+            `).join('')}
+          </select>
+        ` : ''}
+
+        ${!teacher ? `
+          <div class="heartCard">
+            <b>💗 친구 칭찬 보내기</b>
+
+            <label for="praiseToLive">받을 친구</label>
+            <select id="praiseToLive">${options}</select>
+
+            <label for="praiseTextLive">칭찬 내용</label>
+            <textarea
+              id="praiseTextLive"
+              maxlength="160"
+              rows="3"
+              placeholder="고마웠던 일을 구체적으로 적어주세요."
+            ></textarea>
+
+            <p style="color:#64748b;font-size:12px">
+              같은 친구에게는 한 번만 보낼 수 있어요.
+              자기 자신에게는 보낼 수 없어요.
+            </p>
+
+            <button id="sendPraiseLive">
+              💌 칭찬 보내기
+            </button>
+          </div>
+        ` : ''}
+
+        <div class="heartCard">
+          <b>📬 받은 칭찬</b>
+          <div id="receivedList"></div>
+        </div>
+      </div>
+    `;
+
+    window.openModal('💗 칭찬과 하트',html,root=>{
+
+      if (teacher) {
+        const select = $('heartStudent');
+        select.value = String(target);
+
+        select.onchange = () =>
+          subscribe(Number(select.value));
+
+      } else {
+        $('sendPraiseLive').onclick = async () => {
+          const toId = Number($('praiseToLive').value);
+          const txt = $('praiseTextLive').value.trim();
+
+          if (!ids.includes(toId) || toId === mine) {
+            notify('칭찬할 친구를 선택해 주세요.');
+            return;
+          }
+
+          if (txt.length < 5 || txt.length > 160) {
+            notify('칭찬은 5~160자로 입력해 주세요.');
+            return;
+          }
+
+          const button = $('sendPraiseLive');
+          button.disabled = true;
+
+          try {
+            // 같은 발신자와 수신자 조합은 문서 1개만 생성
+            await setDoc(
+              doc(praiseCol,`${accountUid}_${toId}`),
+              {
+                fromUid: accountUid,
+                fromId: mine,
+                toId: toId,
+                text: txt,
+                createdAt: serverTimestamp()
+              }
+            );
+
+            $('praiseTextLive').value = '';
+
+            notify('칭찬을 보냈어요! 친구에게 하트가 추가됩니다.');
+
+          } catch (error) {
+            console.error(error);
+
+            notify(
+              '저장 실패: 이미 칭찬했거나 Firebase 권한 설정을 확인해야 합니다.'
+            );
+
+          } finally {
+            button.disabled = false;
+          }
+        };
+      }
+
+      renderReceived();
+    });
+  }
+
+  // 기존 칭찬 버튼을 새 칭찬 화면에 연결
+  document.addEventListener('click',event=>{
+    const button = event.target.closest(
+      '[data-open="praise"]'
+    );
+
+    if (!button) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    event.stopPropagation();
+
+    openPraise();
+  },true);
+
+  // 로그인한 계정 확인
+  onAuthStateChanged(auth,async user=>{
+    if (unsubscribe) {
+      unsubscribe();
+      unsubscribe = null;
+    }
+
+    account = null;
+    accountUid = null;
+    received = [];
+    updateHeartBadge();
+
+    if (!user) return;
+
+    try {
+      const snap = await getDoc(
+        doc(db,'accounts',user.uid)
+      );
+
+      if (!snap.exists() ||
+          auth.currentUser?.uid !== user.uid) return;
+
+      account = snap.data();
+      accountUid = user.uid;
+
+      if (account.role === 'student') {
+        subscribe(Number(account.studentId));
+      } else if (account.role === 'teacher') {
+        subscribe(1);
+      } else {
+        account = null;
+        updateHeartBadge();
+      }
+
+    } catch (error) {
+      console.error('칭찬 계정 확인 실패',error);
+    }
+  });
+
+  updateHeartBadge();
+})();
+</script>
+<!-- 칭찬 시스템 끝 -->
+
 </body></html>
 
 
