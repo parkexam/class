@@ -2957,6 +2957,133 @@ import {
 
 <!-- 급식 메뉴 이동 끝 -->
 
+<!-- 성장 도감: 해금한 모습만 공개, 미해금은 검은 ? 카드 -->
+<style>
+  #growthMystery .stageCards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit,minmax(125px,1fr));
+    gap: 12px;
+  }
+
+  #growthMystery .stageCard {
+    min-height: 145px;
+    padding: 17px 12px;
+    border-radius: 14px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    text-align: center;
+    color: #0f172a;
+  }
+
+  #growthMystery .stageCard .emoji {
+    font-size: 39px;
+    margin-bottom: 8px;
+  }
+
+  #growthMystery .stageCard.locked {
+    background: linear-gradient(145deg,#111827,#030712);
+    border: 1px solid #374151;
+    color: #9ca3af;
+    box-shadow: inset 0 0 20px #0007;
+  }
+
+  #growthMystery .stageCard.locked .emoji {
+    color: #fff;
+    font: 900 45px system-ui,sans-serif;
+    text-shadow: 0 0 15px #64748b;
+  }
+
+  #growthMystery .stageCard.current {
+    border: 2px solid #3b82f6;
+    background: #eff6ff;
+  }
+
+  #growthMystery .stageCard small {
+    font-size: 11px;
+  }
+</style>
+
+<script>
+(() => {
+  if (
+    typeof openPanel !== 'function' ||
+    typeof openModal !== 'function'
+  ) return;
+
+  const previousOpenPanel = openPanel;
+
+  openPanel = function(id) {
+    if (id !== 'growth') {
+      return previousOpenPanel(id);
+    }
+
+    const number =
+      window.ClassCloud?.role === 'student'
+        ? Number(window.ClassCloud.studentId)
+        : Number(state.chosen);
+
+    const lv =
+      window.ClassCloud?.role === 'student'
+        ? Number(studentLevel(number)) || 1
+        : Math.max(1,Number(state.lv) || 1);
+
+    const cards = phases.map(p => {
+      const unlocked = lv >= p.lv;
+
+      return unlocked
+        ? `
+          <div class="stageCard ${
+            phaseFor(lv).lv === p.lv ? 'current' : ''
+          }">
+            <div class="emoji">${p.icon}</div>
+            <b>Lv.${p.lv} · ${p.label}</b>
+            <br>
+            <small>
+              ${
+                phaseFor(lv).lv === p.lv
+                  ? '✅ 현재 모습'
+                  : '✅ 해금 완료'
+              }
+            </small>
+          </div>
+        `
+        : `
+          <div class="stageCard locked"
+               aria-label="아직 해금하지 않은 성장 단계">
+            <div class="emoji">?</div>
+            <b>???</b>
+            <br>
+            <small>🔒 미해금 · 비밀</small>
+          </div>
+        `;
+    }).join('');
+
+    openModal(
+      '🌱 캐릭터 성장 도감',
+      `
+        <div id="growthMystery">
+          <p class="desc">
+            현재 Lv.${lv}
+            <br>
+            미해금 성장 모습은 비밀이에요.
+            미션을 완료하고 성장해 보세요!
+          </p>
+
+          <div class="stageCards">
+            ${cards}
+          </div>
+
+          <p class="footnote">
+            성장 단계는 확인만 가능하며
+            여기서 레벨을 임의로 변경할 수 없습니다.
+          </p>
+        </div>
+      `
+    );
+  };
+})();
+</script>
+
 </body></html>
 
 
