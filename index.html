@@ -3084,6 +3084,508 @@ import {
 })();
 </script>
 
+<!-- 1학년 12반: 메뉴 정리 및 성장 카드 블라인드 -->
+<style>
+  /* 왼쪽 캐릭터 성장 메뉴 제거 */
+  #leftNav [data-open="growth"],
+  .navBtn[data-open="growth"] {
+    display: none !important;
+  }
+
+  /* 오른쪽 위 불필요한 메뉴 제거 */
+  #townTop,
+  #growTop,
+  #helpTop,
+  #helpButton {
+    display: none !important;
+  }
+
+  /* 내 프로필 성장 카드 */
+  #privateGrowthGallery {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 12px 0 18px;
+    font-family: Pretendard, system-ui, sans-serif;
+  }
+
+  #privateGrowthGallery .growth-tile {
+    min-width: 0;
+    min-height: 155px;
+    padding: 10px 5px;
+    border: 1px solid #dbe4ef;
+    border-radius: 14px;
+    background: #f8fafc;
+    color: #1e293b;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    text-align: center;
+  }
+
+  /* 현재 성장 단계 */
+  #privateGrowthGallery .growth-tile.current {
+    background: #eff6ff;
+    border: 2px solid #2563eb;
+  }
+
+  /* 아직 해금하지 못한 단계 */
+  #privateGrowthGallery .growth-tile.locked {
+    background: linear-gradient(145deg, #171923, #050608);
+    border: 1px solid #343b48;
+    color: #f8fafc;
+  }
+
+  /* 해금한 캐릭터 이미지 */
+  #privateGrowthGallery .growth-tile canvas {
+    display: block;
+    width: min(100%, 100px);
+    height: auto;
+    aspect-ratio: 116 / 128;
+  }
+
+  /* 미해금 물음표 */
+  #privateGrowthGallery .growth-tile .unknown {
+    font: 900 56px/1 system-ui, sans-serif;
+    margin-bottom: 5px;
+    text-shadow: 0 0 13px #94a3b866;
+  }
+
+  #privateGrowthGallery .growth-tile b {
+    font-size: 12px;
+  }
+
+  #privateGrowthGallery .growth-tile small {
+    font-size: 10px;
+    color: #64748b;
+  }
+
+  #privateGrowthGallery .growth-tile.locked small {
+    color: #9ca3af;
+  }
+
+  @media (max-width: 480px) {
+    #privateGrowthGallery {
+      gap: 6px;
+    }
+
+    #privateGrowthGallery .growth-tile {
+      min-height: 125px;
+      padding: 8px 3px;
+    }
+
+    #privateGrowthGallery .growth-tile b {
+      font-size: 10px;
+    }
+  }
+</style>
+
+<script>
+(() => {
+  'use strict';
+
+  if (window.__classGrowthPrivacyV1) return;
+  window.__classGrowthPrivacyV1 = true;
+
+  // ============================================
+  // 1. 실제 Firebase 학생 레벨 확인
+  // ============================================
+
+  const remoteLevels = new Map();
+  const previousApply = window.__v7Apply;
+
+  if (typeof previousApply === 'function') {
+    window.__v7Apply = function(kind, payload) {
+
+      if (
+        kind === 'account' ||
+        kind === 'disconnected'
+      ) {
+        remoteLevels.clear();
+      }
+
+      if (
+        kind === 'students' &&
+        Array.isArray(payload)
+      ) {
+        remoteLevels.clear();
+
+        for (const student of payload) {
+          const id = Number(student.number);
+
+          if (Number.isInteger(id)) {
+            remoteLevels.set(
+              id,
+              Math.max(1, Number(student.level) || 1)
+            );
+          }
+        }
+      }
+
+      return previousApply.apply(this, arguments);
+    };
+  }
+
+  // ============================================
+  // 2. '주민'을 '학생'으로 변경
+  // ============================================
+
+  const rename = text =>
+    typeof text === 'string'
+      ? text.replaceAll('주민', '학생')
+      : text;
+
+  // 새로 열리는 메뉴의 문구 수정
+  const oldModal = window.openModal;
+
+  if (typeof oldModal === 'function') {
+    window.openModal = function(title, html, callback) {
+      return oldModal.call(
+        this,
+        rename(title),
+        rename(html),
+        callback
+      );
+    };
+  }
+
+  // 기존 화면에 표시된 문구 수정
+  function renameTextNodes(root) {
+    if (!root) return;
+
+    const walker = document.createTreeWalker(
+      root,
+      NodeFilter.SHOW_TEXT
+    );
+
+    let node;
+
+    while ((node = walker.nextNode())) {
+      if (node.nodeValue.includes('주민')) {
+        node.nodeValue = rename(node.nodeValue);
+      }
+    }
+  }
+
+  // 화면 내용이 변경되어도 '학생'으로 표시
+  const targets = [
+    'modal',
+    'badgeNow',
+    'leftNav',
+    'toast'
+  ];
+
+  const observer = new MutationObserver(() => {
+    for (const id of targets) {
+      renameTextNodes(
+        document.getElementById(id)
+      );
+    }
+  });
+
+  for (const id of targets) {
+    const el = document.getElementById(id);
+
+    if (el) {
+      renameTextNodes(el);
+
+      observer.observe(el, {
+        childList: true,
+        characterData: true,
+        subtree: true
+      });
+    }
+  }
+
+  // 캐릭터 상태 표시 문구 변경
+  const oldUpdate = window.updateUI;
+
+  if (typeof oldUpdate === 'function') {
+    window.updateUI = function() {
+      const result = oldUpdate.apply(this, arguments);
+
+      renameTextNodes(
+        document.getElementById('badgeNow')
+      );
+
+      return result;
+    };
+  }
+
+  // ============================================
+  // 3. 성장 단계 설정
+  // ============================================
+
+  const stages = [
+    { lv: 1, label: '아기', emoji: '🍼' },
+    { lv: 5, label: '어린이', emoji: '🧸' },
+    { lv: 10, label: '초등학생', emoji: '🎒' },
+    { lv: 20, label: '중학생', emoji: '📚' },
+    { lv: 35, label: '고등학생', emoji: '🎓' },
+    { lv: 50, label: '성인', emoji: '👑' }
+  ];
+
+  // ============================================
+  // 4. 내 프로필 성장 카드 블라인드
+  // ============================================
+
+  const originalProfile = window.openV6Profile;
+
+  if (typeof originalProfile === 'function') {
+
+    window.openV6Profile = function(id) {
+
+      // 기존 프로필과 기록 기능 먼저 실행
+      const result = originalProfile.apply(
+        this,
+        arguments
+      );
+
+      const content =
+        document.getElementById('modalContent');
+
+      if (!content) return result;
+
+      const chosen =
+        typeof state !== 'undefined'
+          ? Number(state.chosen)
+          : 1;
+
+      const no = Number(
+        id ?? (
+          window.ClassCloud?.role === 'student'
+            ? window.ClassCloud.studentId
+            : chosen
+        )
+      );
+
+      // Firebase 연결 시 실제로 수신한 레벨 사용
+      // 아직 수신 전이면 Lv.1까지만 공개
+      const lv = window.ClassCloud?.active
+        ? (remoteLevels.get(no) ?? 1)
+        : Math.max(
+            1,
+            Number(window.studentLevel?.(no)) || 1
+          );
+
+      // 기존에 6단계가 모두 담겨 있던 이미지
+      const oldImage = content.querySelector(
+        'img[alt*="성장 캐릭터"]'
+      );
+
+      const sourceUrl = oldImage?.src || '';
+
+      // 새로운 도감 영역
+      const gallery = document.createElement('div');
+
+      gallery.id = 'privateGrowthGallery';
+
+      gallery.setAttribute(
+        'aria-label',
+        '해금한 성장 모습'
+      );
+
+      const crops = [];
+
+      // 현재 도달한 성장 단계
+      const currentStage =
+        [...stages].reverse().find(
+          s => lv >= s.lv
+        )?.lv || 1;
+
+      // 성장 카드 6개 생성
+      for (const [i, stage] of stages.entries()) {
+
+        const tile = document.createElement('div');
+
+        const unlocked = lv >= stage.lv;
+
+        tile.className =
+          'growth-tile ' +
+          (
+            unlocked
+              ? (
+                  currentStage === stage.lv
+                    ? 'current'
+                    : ''
+                )
+              : 'locked'
+          );
+
+        // 이미 달성한 성장 단계
+        if (unlocked) {
+
+          if (sourceUrl) {
+            const canvas =
+              document.createElement('canvas');
+
+            canvas.width = 116;
+            canvas.height = 128;
+
+            tile.append(canvas);
+
+            crops.push([canvas, i]);
+
+          } else {
+            // 기존 캐릭터 이미지가 아직
+            // 로딩되지 않았다면 임시 표시
+            const fallback =
+              document.createElement('div');
+
+            fallback.className = 'unknown';
+            fallback.textContent = stage.emoji;
+
+            tile.append(fallback);
+          }
+
+          const name = document.createElement('b');
+
+          name.textContent =
+            `Lv.${stage.lv} · ${stage.label}`;
+
+          const stateLabel =
+            document.createElement('small');
+
+          stateLabel.textContent =
+            currentStage === stage.lv
+              ? '✅ 현재 성장 단계'
+              : '✅ 해금 완료';
+
+          tile.append(name, stateLabel);
+
+        } else {
+
+          // 달성하지 못한 성장 단계
+          // 실제 캐릭터 이미지를 그리지 않음
+
+          const mark = document.createElement('div');
+
+          mark.className = 'unknown';
+          mark.textContent = '?';
+
+          const name = document.createElement('b');
+          name.textContent = '???';
+
+          const stateLabel =
+            document.createElement('small');
+
+          stateLabel.textContent =
+            '🔒 미해금 · 비밀';
+
+          tile.append(
+            mark,
+            name,
+            stateLabel
+          );
+        }
+
+        gallery.append(tile);
+      }
+
+      // 기존 6단계 전체 노출 이미지를 제거하고
+      // 새 성장 카드로 교체
+      if (oldImage?.parentElement) {
+        oldImage.parentElement.replaceWith(gallery);
+      } else {
+        content.prepend(gallery);
+      }
+
+      // ========================================
+      // 5. 해금된 캐릭터 그림만 잘라서 표시
+      // ========================================
+
+      if (sourceUrl && crops.length) {
+
+        const source = new Image();
+
+        source.onload = () => {
+
+          if (
+            !source.naturalWidth ||
+            !source.naturalHeight
+          ) return;
+
+          // 기존 성장 이미지 6개를 분리
+          const frameW =
+            source.naturalWidth / stages.length;
+
+          for (const [canvas, i] of crops) {
+
+            const ctx = canvas.getContext('2d');
+
+            if (!ctx) continue;
+
+            ctx.drawImage(
+              source,
+              i * frameW,
+              0,
+              frameW,
+              source.naturalHeight,
+              0,
+              0,
+              canvas.width,
+              canvas.height
+            );
+          }
+        };
+
+        source.src = sourceUrl;
+      }
+
+      renameTextNodes(
+        document.getElementById('modal')
+      );
+
+      return result;
+    };
+  }
+
+  // ============================================
+  // 6. 성장 도감 직접 진입 제한
+  // ============================================
+
+  const oldPanel = window.openPanel;
+
+  if (typeof oldPanel === 'function') {
+
+    window.openPanel = function(id) {
+
+      // 캐릭터를 클릭했을 때도
+      // 옛 성장 체험 대신 내 프로필로 이동
+      if (id === 'growth') {
+        return oldPanel.call(this, 'myProfile');
+      }
+
+      return oldPanel.apply(this, arguments);
+    };
+  }
+
+  // ============================================
+  // 7. 게임 맵에 표시되는 주민 명칭 변경
+  // ============================================
+
+  const oldDrawText = window.drawText;
+
+  if (typeof oldDrawText === 'function') {
+    window.drawText = function(text, ...args) {
+      return oldDrawText.call(
+        this,
+        rename(text),
+        ...args
+      );
+    };
+  }
+
+  console.log(
+    '✅ 메뉴 정리 및 비공개 성장 카드 적용 완료'
+  );
+
+})();
+</script>
+<!-- 성장 카드 수정 끝 -->
+
 </body></html>
 
 
