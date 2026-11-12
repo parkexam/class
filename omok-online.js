@@ -1,1004 +1,293 @@
 
-/* 우리 반 성장 여행 - 2인 실시간 오목 */
-
+/* 1학년 12반 성장 여행 - 하루 1판 오목 + 누적 랭킹
+   기존 omok-online.js 내용을 모두 교체해 사용
+*/
 import {getApps} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
+import {getAuth,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
+import {getFirestore,collection,doc,getDoc,setDoc,query,where,onSnapshot,runTransaction,serverTimestamp} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
-import {
-  getAuth,
-  onAuthStateChanged
-} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
+const app=getApps()[0];
+if(!app) console.error('오목: Firebase가 아직 초기화되지 않았습니다.');
+else {
+ const auth=getAuth(app), db=getFirestore(app);
+ const rooms=collection(db,'classrooms','main','omokFinalRooms');
+ const locks=collection(db,'classrooms','main','omokFinalDaily');
+ const $=id=>document.getElementById(id);
+ const valid=n=>Number.isInteger(n)&&n>=1&&n<=29&&n!==17;
+ const nickname=n=>window.ClassStudentNames?.get(n)||`${n}번`;
+ const dayIndex=()=>Math.floor((Date.now()+9*3600000)/86400000);
+ const lockRef=(n,personUid)=>doc(locks,`${n}_${personUid}`);
+ const active=s=>['waiting','countdown','playing'].includes(s);
+ let self=null, uid=null, room=null, stopRoom=null;
+ let allRooms=[], myRooms=[], finished=[], todayUsed=false;
+ let unsubs=[], listeningDay=null;
+ const currentDay=()=>dayIndex();
+ const tell=s=>{$('ogError').textContent=s||''};
 
-import {
-  getFirestore,
-  collection,
-  doc,
-  getDoc,
-  setDoc,
-  query,
-  where,
-  onSnapshot,
-  runTransaction,
-  serverTimestamp
-} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+ const style=document.createElement('style');
+ style.textContent=`
+ #ogOverlay{position:fixed;inset:0;z-index:100200;background:#0f172ad9;display:none;align-items:center;justify-content:center;padding:10px}
+ #ogDialog{width:min(860px,98vw);max-height:94dvh;overflow:auto;background:#f8fafc;color:#0f172a;border-radius:18px;padding:20px;font:14px/1.55 Pretendard,system-ui,sans-serif;box-shadow:0 20px 80px #0007}
+ #ogDialog *{box-sizing:border-box}
+ #ogDialog h2{color:#0f172a;font-size:21px;margin:0}
+ #ogDialog button{border:0;background:#2563eb;color:#fff;border-radius:9px;padding:9px 12px;cursor:pointer;font:700 13px Pretendard,system-ui,sans-serif}
+ #ogDialog button:disabled{opacity:.45;cursor:not-allowed}
+ #ogDialog .muted{color:#64748b;font-size:12px}
+ #ogDialog .light{background:#e2e8f0;color:#334155}
+ #ogDialog .panel{border:1px solid #e2e8f0;border-radius:12px;background:white;padding:14px;margin-top:12px}
+ #ogDialog .row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+ #ogError{color:#b91c1c;white-space:pre-wrap}
+ #ogLobby button,#ogHistory button{margin:4px}
+ #ogBoard{display:grid;grid-template-columns:repeat(15,minmax(0,1fr));width:min(525px,90vw);aspect-ratio:1;background:#ebc892;border:2px solid #926639;margin:14px auto;touch-action:manipulation}
+ #ogBoard button{padding:0!important;border:1px solid #b58f5c!important;border-radius:0!important;background:transparent!important;display:grid;place-items:center;min-width:0;min-height:0;box-shadow:none!important}
+ #ogBoard button span{width:78%;aspect-ratio:1;border-radius:50%;display:block}
+ #ogBoard .black{background:radial-gradient(circle at 35% 25%,#555,#111827 65%);box-shadow:1px 2px 2px #0008}
+ #ogBoard .white{background:radial-gradient(circle at 35% 25%,white,#cbd5e1 75%);border:1px solid #94a3b8;box-shadow:1px 2px 2px #0005}
+ #ogBoard .last{outline:2px solid #e11d48;outline-offset:-2px}
+ #ogRanks{width:100%;border-collapse:collapse;font-size:12px}
+ #ogRanks td,#ogRanks th{padding:7px;border-bottom:1px solid #e2e8f0;text-align:center}
+ #ogRanks tr.mine{background:#eff6ff;font-weight:800}
+ #ogRanks th{background:#f1f5f9}
+ @media(max-width:540px){#ogDialog{padding:12px}#ogDialog h2{font-size:18px}}
+ `;
+ document.head.append(style);
 
-const app = getApps()[0];
+ const overlay=document.createElement('div');
+ overlay.id='ogOverlay';
+ overlay.innerHTML=`
+  <section id="ogDialog" role="dialog" aria-modal="true" aria-label="오목 온라인 대결">
+   <div class="row"><h2>🎮 온라인 오목 · 하루 1판</h2><button id="ogClose" class="light">닫기 ×</button></div>
+   <p class="muted">2명 입장 → 모두 준비 → 3초 후 시작 · 한국시간 자정 초기화</p>
+   <div id="ogError" role="alert"></div>
+   <div class="panel"><b id="ogToday">오늘의 대국 확인 중…</b><div id="ogStats" class="muted"></div></div>
+   <div class="panel"><div class="row"><b>🏁 대기 중인 방</b><button id="ogCreate">+ 새 방 만들기</button></div><div id="ogLobby"></div></div>
+   <div class="panel"><b>📂 내 대국</b><div id="ogHistory"></div></div>
+   <div class="panel" id="ogGame" style="display:none">
+    <div id="ogRoomInfo"></div>
+    <div class="row"><button id="ogReady">준비하기</button><button id="ogLeave" class="light">방 나가기 / 기권</button></div>
+    <p id="ogStatus" style="font-weight:850;color:#1d4ed8"></p>
+    <div id="ogBoard"></div>
+   </div>
+   <div class="panel"><h3 style="margin:0 0 8px">🏆 누적 오목 랭킹</h3><p class="muted">승리 수 → 승률 → 대국 수 순 · 진행 중인 대국은 제외</p><table id="ogRanks"><thead><tr><th>순위</th><th>학생</th><th>승</th><th>패</th><th>무</th><th>승률</th></tr></thead><tbody id="ogRankRows"></tbody></table></div>
+   <p class="muted">대기방 생성만으로는 1판이 차감되지 않습니다. 시작 이후 기권하면 당일 추가 대국이 불가능합니다.</p>
+  </section>`;
+ document.body.append(overlay);
+ const viewing=()=>overlay.style.display==='flex';
+ $('ogClose').onclick=()=>overlay.style.display='none';
+ overlay.onclick=e=>{if(e.target===overlay)overlay.style.display='none'};
 
-if (!app) {
-  console.error('미니게임: Firebase 초기화가 필요합니다.');
-} else {
+ const nav=document.createElement('button');
+ nav.className='navBtn';nav.dataset.open='minigame';nav.type='button';
+ nav.innerHTML='<i>🎮</i> 미니게임 · 오목';
+ nav.onclick=()=>{if(!self)return;overlay.style.display='flex';renderAll()};
+ document.getElementById('leftNav')?.append(nav);
+ const visibleNav=()=>nav.style.display=self?'':'none';
+ visibleNav();
 
-const auth = getAuth(app);
-const db = getFirestore(app);
+ function boardOf(moves){const a=Array(225).fill(0);for(const m of moves){if(m.x>=0&&m.x<15&&m.y>=0&&m.y<15)a[m.y*15+m.x]=m.p}return a}
+ function five(a,x,y,p){for(const [dx,dy] of [[1,0],[0,1],[1,1],[1,-1]]){let c=1;for(const d of [-1,1])for(let k=1;k<=5;k++){const xx=x+dx*k*d,yy=y+dy*k*d;if(xx<0||xx>14||yy<0||yy>14||a[yy*15+xx]!==p)break;c++}if(c>=5)return true}return false}
 
-const rooms = collection(
-  db, 'classrooms', 'main', 'omokRooms'
-);
+ function winnerStats(){
+  const res=new Map();for(const n of [...Array.from({length:16},(_,i)=>i+1),...Array.from({length:12},(_,i)=>i+18)])res.set(n,{n,w:0,l:0,d:0});
+  for(const r of finished){if(!Array.isArray(r.nos)||r.nos.length!==2)continue;for(const n of r.nos){const v=res.get(n);if(!v)continue;if(r.winner===0)v.d++;else if(r.winner===n)v.w++;else if(r.winner!=null)v.l++}}
+  return [...res.values()].sort((a,b)=>b.w-a.w||((b.w/(b.w+b.l+b.d||1))-(a.w/(a.w+a.l+a.d||1)))||((b.w+b.l+b.d)-(a.w+a.l+a.d))||a.n-b.n);
+ }
 
-const $ = id => document.getElementById(id);
-
-let me = null;
-let uid = null;
-let openRooms = [];
-let myGames = [];
-let room = null;
-let roomId = null;
-
-let stopOpen = null;
-let stopMine = null;
-let stopRoom = null;
-
-const valid = n =>
-  Number.isInteger(n) && n >= 1 && n <= 29 && n !== 17;
-
-const isStudent = () =>
-  me?.role === 'student' && Number.isInteger(me.no);
-
-const nickname = n =>
-  window.ClassStudentNames?.get(n) || `${n}번`;
-
-// ===== 디자인 =====
-
-const style = document.createElement('style');
-
-style.textContent = `
-  #omokOverlay {
-    position: fixed;
-    inset: 0;
-    z-index: 100200;
-    background: #0f172ad9;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 10px;
+ function showRank(){
+  const rows=$('ogRankRows');rows.replaceChildren();
+  for(const [i,s] of winnerStats().entries()){
+   const tr=document.createElement('tr');if(s.n===self?.no)tr.className='mine';
+   const pct=(100*s.w/(s.w+s.l+s.d||1)).toFixed(1)+'%';
+   for(const v of [i+1,nickname(s.n),s.w,s.l,s.d,pct]){const td=document.createElement('td');td.textContent=v;tr.append(td)}rows.append(tr);
   }
+ }
 
-  #omokWindow {
-    width: min(800px,98vw);
-    max-height: 94dvh;
-    overflow: auto;
-    padding: 20px;
-    background: #f8fafc;
-    border-radius: 20px;
-    box-shadow: 0 24px 70px #0007;
-    font: 14px/1.5 Pretendard,system-ui,sans-serif;
-    color: #0f172a;
+ function renderAll(){
+  if(!viewing()||!self)return;
+  const stats=winnerStats().find(r=>r.n===self.no)||{w:0,l:0,d:0};
+  const meGames=stats.w+stats.l+stats.d;
+  $('ogStats').textContent=`누적 ${meGames}전 ${stats.w}승 ${stats.l}패 ${stats.d}무 · 승률 ${(100*stats.w/(meGames||1)).toFixed(1)}%`;
+  $('ogToday').textContent=self.role==='teacher'?'👩‍🏫 교사용 학급 랭킹 조회':todayUsed?'🔒 오늘의 1판 사용 완료 · 내일 다시 도전!':'✅ 오늘 1판 대결 가능';
+  const ongoing=myRooms.find(r=>active(r.status));
+  $('ogCreate').disabled=self.role==='teacher'||todayUsed||!!ongoing;
+  const lobby=$('ogLobby');lobby.replaceChildren();
+  for(const r of allRooms.filter(r=>r.status==='waiting')){
+   const b=document.createElement('button');b.className='light';
+   b.textContent=`${r.id.slice(0,6)} · ${nickname(r.nos?.[0])} · ${r.players.length}/2명`;
+   b.disabled=self.role==='teacher'||((todayUsed||r.players.length>=2)&&!r.players.includes(uid));
+   b.onclick=()=>r.players.includes(uid)?watchRoom(r.id):join(r.id);lobby.append(b);
   }
-
-  #omokWindow * {
-    box-sizing: border-box;
+  if(!lobby.children.length)lobby.textContent='대기 중인 방이 없습니다.';
+  const hist=$('ogHistory');hist.replaceChildren();
+  for(const r of myRooms.slice(0,25)){
+   const b=document.createElement('button');b.className='light';
+   b.textContent=`${r.nos.map(nickname).join(' vs ')} · ${r.status==='finished'?'종료':r.status==='cancelled'?'취소':'진행 중'}`;
+   b.onclick=()=>watchRoom(r.id);hist.append(b);
   }
+  if(!hist.children.length)hist.textContent='참여한 대국이 없습니다.';
+  showRank();renderRoom();
+ }
 
-  #omokWindow .og-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+ async function refreshDay(){
+  if(!uid)return;
+  const n=currentDay();
+  if(listeningDay===n)return;
+  listeningDay=n;
+  try{const s=await getDoc(lockRef(n,uid));if(currentDay()===n&&auth.currentUser?.uid===uid){todayUsed=s.exists();renderAll()}}catch(e){tell('하루 이용권 확인 실패: '+e.message)}
+ }
+
+ async function canStart(){
+  await refreshDay();
+  const s=await getDoc(lockRef(currentDay(),uid));
+  if(s.exists()){todayUsed=true;renderAll();throw Error('오늘은 이미 1판을 사용했어요.')}
+ }
+
+ $('ogCreate').onclick=async()=>{
+  if(!self||self.role!=='student')return;
+  try{
+   await canStart();
+   if(myRooms.some(r=>active(r.status)))throw Error('이미 참여 중인 방이 있습니다.');
+   const ref=doc(rooms);
+   await setDoc(ref,{players:[uid],nos:[self.no],ready:[false,false],moves:[],status:'waiting',winner:null,startAt:null,endedAt:null,createdAt:serverTimestamp(),dayIndex:null});
+   tell('');watchRoom(ref.id);
+  }catch(e){tell('방 생성 실패: '+e.message)}
+ };
+
+ async function join(id){
+  if(!self||self.role!=='student')return;
+  try{
+   await canStart();
+   if(myRooms.some(r=>active(r.status)))throw Error('이미 참여 중인 방이 있습니다.');
+   await runTransaction(db,async tx=>{
+    const ref=doc(rooms,id),lock=lockRef(currentDay(),uid);
+    const s=await tx.get(ref),l=await tx.get(lock);
+    if(l.exists())throw Error('오늘의 1판을 이미 사용했어요.');
+    if(!s.exists())throw Error('방이 삭제됐습니다.');
+    const r=s.data();
+    if(r.status!=='waiting'||r.players.length!==1||r.players.includes(uid))throw Error('입장 가능한 방이 아닙니다.');
+    tx.update(ref,{players:[r.players[0],uid],nos:[r.nos[0],self.no],ready:[false,false]});
+   });
+   tell('');watchRoom(id);
+  }catch(e){tell('방 입장 실패: '+e.message)}
+ }
+
+ function watchRoom(id){
+  stopRoom?.();room=null;
+  stopRoom=onSnapshot(doc(rooms,id),s=>{room=s.exists()?{id:s.id,...s.data()}:null;renderRoom()},e=>tell('대국 연결 오류: '+e.message));
+  overlay.style.display='flex';renderRoom();
+ }
+
+ function stage(r){if(r.status!=='countdown')return r.status;const n=r.startAt?.toMillis?.();return n&&Date.now()>=n+3000?'playing':'countdown'}
+
+ function renderRoom(){
+  const p=$('ogGame');
+  if(!viewing()||!room||!room.players.includes(uid)){p.style.display='none';return}
+  p.style.display='block';
+  const idx=room.players.indexOf(uid),phase=stage(room);
+  $('ogRoomInfo').textContent=`방 ${room.id.slice(0,6)} · ${room.nos.map((n,i)=>`${i?'⚪':'⚫'} ${nickname(n)}${room.ready[i]?' ✅':''}`).join(' vs ')}`;
+  $('ogReady').style.display=room.status==='waiting'?'':'none';
+  $('ogReady').disabled=room.players.length!==2||todayUsed;
+  $('ogReady').textContent=room.ready[idx]?'준비 취소':'준비하기';
+  $('ogLeave').style.display=['finished','cancelled'].includes(room.status)?'none':'';
+  let msg=room.status==='waiting'?(room.players.length===1?'상대방 입장 대기 중':'두 사람 모두 준비 버튼을 눌러주세요')
+   :phase==='countdown'?`${Math.max(1,Math.ceil(((room.startAt?.toMillis?.()||Date.now())+3000-Date.now())/1000))}초 후 시작!`
+   :phase==='playing'?(room.moves.length%2===idx?'✅ 내 차례':'상대방 차례')
+   :room.status==='finished'?(room.winner===0?'무승부':room.winner===self.no?'🏆 승리!':'상대방 승리'):'취소된 방';
+  $('ogStatus').textContent=msg;
+  const cells=boardOf(room.moves),last=room.moves.at(-1),board=$('ogBoard');board.replaceChildren();
+  for(let i=0;i<225;i++){
+   const b=document.createElement('button');b.type='button';b.className=(last&&i===last.y*15+last.x)?'last':'';
+   b.setAttribute('aria-label',`${Math.floor(i/15)+1}행 ${i%15+1}열`);
+   if(cells[i]){const stone=document.createElement('span');stone.className=cells[i]===1?'black':'white';b.append(stone)}
+   b.disabled=!!cells[i]||phase!=='playing'||room.moves.length%2!==idx;
+   b.onclick=()=>place(i%15,Math.floor(i/15));board.append(b);
   }
+ }
 
-  #omokWindow h2 {
-    margin: 0;
-    color: #0f172a;
-    font-size: 22px;
-  }
+ $('ogReady').onclick=async()=>{
+  if(!room||!uid||self?.role!=='student')return;
+  try{
+   await runTransaction(db,async tx=>{
+    const ref=doc(rooms,room.id),s=await tx.get(ref);
+    if(!s.exists())throw Error('방이 없습니다.');
+    const r=s.data(),i=r.players.indexOf(uid);
+    if(r.status!=='waiting'||r.players.length!==2||i<0)throw Error('준비할 수 없는 방입니다.');
+    const ready=[...r.ready];ready[i]=!ready[i];
+    if(ready.every(Boolean)){
+     const d=currentDay();
+     const refs=r.players.map(id=>lockRef(d,id));
+     const existing=await Promise.all(refs.map(x=>tx.get(x)));
+     if(existing.some(x=>x.exists()))throw Error('두 학생 중 오늘 이미 대국한 학생이 있어요.');
+     tx.update(ref,{ready,status:'countdown',startAt:serverTimestamp(),dayIndex:d});
+     for(let j=0;j<2;j++)tx.set(refs[j],{uid:r.players[j],studentId:r.nos[j],roomId:room.id,dayIndex:d,startedAt:serverTimestamp()});
+    } else tx.update(ref,{ready});
+   });
+   tell('');await refreshDay();
+  }catch(e){tell('준비 실패: '+e.message)}
+ };
 
-  #omokWindow .og-muted {
-    color: #64748b;
-    font-size: 12px;
-  }
+ async function place(x,y){
+  if(!room||!uid||self?.role!=='student')return;
+  try{
+   await runTransaction(db,async tx=>{
+    const ref=doc(rooms,room.id),s=await tx.get(ref);
+    if(!s.exists())throw Error('방이 없습니다.');
+    const r=s.data(),i=r.players.indexOf(uid);
+    if(!['countdown','playing'].includes(r.status)||!r.startAt||Date.now()<r.startAt.toMillis()+3000)throw Error('대국 시작 전입니다.');
+    if(i<0||r.moves.length%2!==i)throw Error('내 차례가 아닙니다.');
+    if(r.moves.some(m=>m.x===x&&m.y===y))throw Error('이미 돌이 있습니다.');
+    const moves=[...r.moves,{x,y,p:i+1}],grid=boardOf(moves),win=five(grid,x,y,i+1),draw=!win&&moves.length===225;
+    tx.update(ref,{moves,status:win||draw?'finished':'playing',winner:win?r.nos[i]:draw?0:null,endedAt:win||draw?serverTimestamp():null});
+   });tell('');
+  }catch(e){tell('착수 오류: '+e.message)}
+ }
 
-  #omokWindow .og-card {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 13px;
-    padding: 14px;
-    margin-top: 12px;
-  }
+ $('ogLeave').onclick=async()=>{
+  if(!room||!uid||self?.role!=='student')return;
+  if(!confirm(['playing','countdown'].includes(room.status)?'기권하면 오늘의 1판이 사용됩니다. 나갈까요?':'대기방에서 나갈까요?'))return;
+  try{
+   await runTransaction(db,async tx=>{
+    const ref=doc(rooms,room.id),s=await tx.get(ref);
+    if(!s.exists())throw Error('방이 없습니다.');
+    const r=s.data(),i=r.players.indexOf(uid);
+    if(i<0)throw Error('참가자가 아닙니다.');
+    if(r.status==='waiting'){
+     if(r.players.length===1)tx.update(ref,{status:'cancelled'});
+     else{const other=1-i;tx.update(ref,{players:[r.players[other]],nos:[r.nos[other]],ready:[false,false]})}
+    }else if(['countdown','playing'].includes(r.status)){
+     tx.update(ref,{status:'finished',winner:r.nos[1-i],endedAt:serverTimestamp()});
+    }else throw Error('종료된 대국입니다.');
+   });
+   tell('');stopRoom?.();stopRoom=null;room=null;renderRoom();
+  }catch(e){tell('나가기 실패: '+e.message)}
+ };
 
-  #omokWindow button {
-    border: 0;
-    border-radius: 9px;
-    background: #2563eb;
-    color: white;
-    padding: 9px 12px;
-    cursor: pointer;
-    font: 700 13px Pretendard,system-ui,sans-serif;
-  }
+ setInterval(()=>{if(viewing()&&room?.status==='countdown')renderRoom();if(uid&&listeningDay!==currentDay())refreshDay()},600);
 
-  #omokWindow button[disabled] {
-    opacity: .5;
-    cursor: not-allowed;
-  }
-
-  #omokWindow button.og-secondary {
-    background: #e2e8f0;
-    color: #334155;
-  }
-
-  #omokWindow .og-row {
-    display: flex;
-    gap: 9px;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    margin: 7px 0;
-  }
-
-  #omokWindow .og-board {
-    width: min(540px,92vw);
-    display: grid;
-    grid-template-columns: repeat(15,minmax(0,1fr));
-    border: 2px solid #a97a4e;
-    background: #eac995;
-    aspect-ratio: 1;
-    margin: 15px auto;
-    touch-action: manipulation;
-  }
-
-  #omokWindow .og-cell {
-    padding: 0 !important;
-    width: 100%;
-    height: 100%;
-    border: 1px solid #ab885e !important;
-    border-radius: 0 !important;
-    background: transparent !important;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 0 !important;
-    box-shadow: none !important;
-  }
-
-  #omokWindow .og-cell span {
-    display: block;
-    border-radius: 50%;
-    width: 78%;
-    aspect-ratio: 1;
-  }
-
-  #omokWindow .og-black {
-    background: radial-gradient(
-      circle at 35% 30%,#555,#0f172a 70%
-    );
-    box-shadow: 1px 2px 3px #0007;
-  }
-
-  #omokWindow .og-white {
-    background: radial-gradient(
-      circle at 35% 30%,#fff,#cbd5e1 75%
-    );
-    box-shadow: 1px 2px 3px #0005;
-    border: 1px solid #94a3b8;
-  }
-
-  #omokWindow .og-last {
-    outline: 2px solid #dc2626;
-    outline-offset: -2px;
-  }
-
-  #omokWindow .og-list button {
-    margin: 4px;
-  }
-
-  #omokWindow .og-status {
-    font-weight: 850;
-    color: #1d4ed8;
-    font-size: 16px;
-  }
-
-  #omokWindow .og-error {
-    color: #b91c1c;
-    white-space: pre-wrap;
-  }
-
-  @media(max-width:520px) {
-    #omokWindow {
-      padding: 12px;
-      border-radius: 14px;
-    }
-
-    #omokWindow h2 {
-      font-size: 18px;
-    }
-
-    #omokWindow .og-board {
-      width: min(95vw,490px);
-    }
-  }
-`;
-
-document.head.append(style);
-
-// ===== 게임 팝업 =====
-
-const overlay = document.createElement('div');
-overlay.id = 'omokOverlay';
-
-overlay.innerHTML = `
-  <section id="omokWindow"
-           role="dialog"
-           aria-modal="true"
-           aria-label="온라인 오목">
-
-    <div class="og-top">
-      <h2>⚫⚪ 우리 반 오목 대결</h2>
-      <button class="og-secondary" id="omokClose">
-        닫기 ×
-      </button>
-    </div>
-
-    <p class="og-muted">
-      학생 2명 입장 → 모두 준비 → 3초 뒤 시작
-    </p>
-
-    <div id="omokError" class="og-error"></div>
-
-    <div class="og-card" id="omokStats">
-      전적 불러오는 중...
-    </div>
-
-    <div class="og-card">
-      <div class="og-row">
-        <b>대기 중인 방</b>
-        <button id="omokCreate">
-          + 새 방 만들기
-        </button>
-      </div>
-      <div class="og-list" id="omokLobby"></div>
-    </div>
-
-    <div class="og-card">
-      <b>내 대국 목록</b>
-      <div class="og-list" id="omokMine"></div>
-    </div>
-
-    <div class="og-card" id="omokRoom" style="display:none">
-
-      <div id="omokRoomInfo"></div>
-
-      <div class="og-row">
-        <button id="omokReady">준비하기</button>
-
-        <button id="omokExit" class="og-secondary">
-          방 나가기 / 기권
-        </button>
-      </div>
-
-      <div class="og-status" id="omokStatus"></div>
-
-      <div class="og-board" id="omokBoard"></div>
-    </div>
-
-    <p class="og-muted">
-      대국 기록은 Firebase에 저장됩니다.
-      새로고침 후에도 완료된 대국을 확인할 수 있습니다.
-    </p>
-
-  </section>
-`;
-
-document.body.append(overlay);
-
-const err = s => {
-  $('omokError').textContent = s;
-};
-
-const viewOpen = () =>
-  overlay.style.display === 'flex';
-
-function close() {
-  overlay.style.display = 'none';
-}
-
-$('omokClose').onclick = close;
-
-overlay.addEventListener('click', e => {
-  if (e.target === overlay) close();
-});
-
-// ===== 왼쪽 미니게임 버튼 =====
-
-function show() {
-  if (!isStudent()) {
-    alert('미니게임은 학생 계정으로 로그인해야 합니다.');
+ onAuthStateChanged(auth,async user=>{
+  for(const stop of unsubs)stop();unsubs=[];stopRoom?.();stopRoom=null;
+  room=null;self=null;uid=null;allRooms=[];myRooms=[];finished=[];todayUsed=false;listeningDay=null;
+  visibleNav();overlay.style.display='none';
+  if(!user)return;
+  try{
+   const snap=await getDoc(doc(db,'accounts',user.uid));
+   if(auth.currentUser?.uid!==user.uid||!snap.exists())return;
+   const a=snap.data(),n=Number(a.studentId);
+   if(a.role==='teacher'){
+    uid=user.uid;self={role:'teacher',no:0};visibleNav();
+    unsubs.push(onSnapshot(query(rooms,where('status','==','finished')),s=>{finished=s.docs.map(d=>({id:d.id,...d.data()}));renderAll()},e=>tell(e.message)));
     return;
-  }
-
-  overlay.style.display = 'flex';
-  renderLists();
-  renderRoom();
-}
-
-const button = document.createElement('button');
-
-button.className = 'navBtn';
-button.type = 'button';
-button.dataset.open = 'minigame';
-
-button.innerHTML = '<i>🎮</i> 미니게임 · 오목';
-button.onclick = show;
-
-document.getElementById('leftNav')?.append(button);
-
-function showButton() {
-  button.style.display = isStudent() ? '' : 'none';
-}
-
-showButton();
-
-// ===== 전적 / 대기방 표시 =====
-
-function renderLists() {
-  if (!viewOpen()) return;
-
-  const finished = myGames.filter(
-    r => r.status === 'finished'
-  );
-
-  const wins = finished.filter(
-    r => r.winner === me.no
-  ).length;
-
-  const draws = finished.filter(
-    r => r.winner === 0
-  ).length;
-
-  $('omokStats').textContent =
-    `🏅 누적 전적: ${finished.length}전 ` +
-    `${wins}승 ${finished.length-wins-draws}패 ${draws}무`;
-
-  const list = $('omokLobby');
-  list.replaceChildren();
-
-  const free = openRooms.filter(
-    r => r.status === 'waiting'
-  );
-
-  if (!free.length) {
-    list.textContent = '열린 대기방이 없어요.';
-  }
-
-  for (const r of free) {
-    const b = document.createElement('button');
-    b.className = 'og-secondary';
-
-    b.textContent =
-      `방 ${r.id.slice(0,6)} · ` +
-      `${nickname(r.nos[0])} · ` +
-      `${r.players.length}/2명` +
-      (r.players.includes(uid) ? ' (내 방)' : '');
-
-    b.onclick = () => r.players.includes(uid)
-      ? selectRoom(r.id)
-      : join(r.id);
-
-    b.disabled =
-      r.players.length >= 2 && !r.players.includes(uid);
-
-    list.append(b);
-  }
-
-  const mine = $('omokMine');
-  mine.replaceChildren();
-
-  for (const r of myGames.slice(0, 30)) {
-    const b = document.createElement('button');
-    b.className = 'og-secondary';
-
-    b.textContent =
-      `${r.id.slice(0,6)} · ` +
-      `${r.status === 'finished'
-        ? '종료'
-        : r.status === 'cancelled'
-          ? '취소'
-          : '진행 중'} · ` +
-      `${r.nos.map(nickname).join(' vs ')}`;
-
-    b.onclick = () => selectRoom(r.id);
-    mine.append(b);
-  }
-
-  if (!myGames.length) {
-    mine.textContent = '아직 참여한 대국이 없어요.';
-  }
-}
-
-// ===== 새 방 만들기 =====
-
-$('omokCreate').onclick = async () => {
-  if (!isStudent()) return;
-
-  const active = myGames.find(
-    r => !['finished','cancelled'].includes(r.status)
-  );
-
-  if (active) {
-    selectRoom(active.id);
-    err('먼저 진행 중인 방을 완료하거나 나가세요.');
-    return;
-  }
-
-  const ref = doc(rooms);
-
-  try {
-    await setDoc(ref, {
-      players: [uid],
-      nos: [me.no],
-      ready: [false,false],
-      moves: [],
-      status: 'waiting',
-      winner: null,
-      startAt: null,
-      endedAt: null,
-      createdAt: serverTimestamp()
-    });
-
-    err('');
-    selectRoom(ref.id);
-
-  } catch (e) {
-    err('방 생성 실패: ' + e.message);
-  }
-};
-
-// ===== 다른 학생 방 입장 =====
-
-async function join(id) {
-  if (!isStudent()) return;
-
-  try {
-    await runTransaction(db, async tx => {
-      const ref = doc(rooms, id);
-      const s = await tx.get(ref);
-
-      if (!s.exists()) {
-        throw Error('이미 사라진 방입니다.');
-      }
-
-      const r = s.data();
-
-      if (r.players.includes(uid)) return;
-
-      if (
-        r.status !== 'waiting' ||
-        r.players.length !== 1
-      ) {
-        throw Error('방이 가득 찼습니다.');
-      }
-
-      tx.update(ref, {
-        players: [r.players[0], uid],
-        nos: [r.nos[0], me.no],
-        ready: [false,false]
-      });
-    });
-
-    err('');
-    selectRoom(id);
-
-  } catch (e) {
-    err('입장 실패: ' + e.message);
-  }
-}
-
-// ===== 방 실시간 구독 =====
-
-function selectRoom(id) {
-  stopRoom?.();
-  stopRoom = null;
-
-  roomId = id;
-  room = null;
-
-  stopRoom = onSnapshot(
-    doc(rooms,id),
-    snapshot => {
-      room = snapshot.exists()
-        ? {id:snapshot.id,...snapshot.data()}
-        : null;
-
-      renderRoom();
-    },
-    e => err('대국 연결 실패: ' + e.message)
-  );
-
-  if (isStudent()) {
-    overlay.style.display = 'flex';
-  }
-}
-
-// ===== 오목 판과 승리 판정 =====
-
-function boardFrom(moves) {
-  const cells = Array(225).fill(0);
-
-  for (const m of moves) {
-    if (
-      m.x >= 0 && m.x < 15 &&
-      m.y >= 0 && m.y < 15
-    ) {
-      cells[m.y*15+m.x] = m.p;
-    }
-  }
-
-  return cells;
-}
-
-function checkFive(cells,x,y,p) {
-  const directions = [
-    [1,0],[0,1],[1,1],[1,-1]
-  ];
-
-  for (const [dx,dy] of directions) {
-    let count = 1;
-
-    for (const dir of [-1,1]) {
-      for (let step=1;step<6;step++) {
-        const xx = x+dx*step*dir;
-        const yy = y+dy*step*dir;
-
-        if (
-          xx<0 || xx>=15 ||
-          yy<0 || yy>=15 ||
-          cells[yy*15+xx]!==p
-        ) break;
-
-        count++;
-      }
-    }
-
-    if (count >= 5) return true;
-  }
-
-  return false;
-}
-
-function getRoundState(r) {
-  if (r.status !== 'countdown') return r.status;
-
-  const start = r.startAt?.toMillis?.();
-
-  if (!start) return 'countdown';
-
-  return Date.now() >= start+3000
-    ? 'playing'
-    : 'countdown';
-}
-
-// ===== 게임 화면 갱신 =====
-
-function renderRoom() {
-  const panel = $('omokRoom');
-
-  if (
-    !viewOpen() ||
-    !room ||
-    !room.players.includes(uid)
-  ) {
-    panel.style.display = 'none';
-    return;
-  }
-
-  panel.style.display = 'block';
-
-  const idx = room.players.indexOf(uid);
-  const status = getRoundState(room);
-
-  const players = room.nos.map((n,i) =>
-    `${i===0?'⚫':'⚪'} ${nickname(n)} ` +
-    `${room.ready[i]?'✅':''}`
-  ).join('　vs　');
-
-  $('omokRoomInfo').textContent =
-    `방 ${room.id.slice(0,6)} · ${players}`;
-
-  const readyBtn = $('omokReady');
-
-  readyBtn.style.display =
-    room.status==='waiting' ? '' : 'none';
-
-  readyBtn.disabled = room.players.length !== 2;
-
-  readyBtn.textContent = room.ready[idx]
-    ? '준비 취소'
-    : '준비하기';
-
-  $('omokExit').style.display =
-    room.status==='finished' ||
-    room.status==='cancelled'
-      ? 'none'
-      : '';
-
-  let msg = '';
-
-  if (room.status==='waiting') {
-    msg = room.players.length===1
-      ? '상대방 입장 대기 중'
-      : '두 사람 모두 준비 버튼을 눌러주세요.';
-  }
-
-  if (status==='countdown') {
-    const start = room.startAt?.toMillis?.() || Date.now();
-
-    const remain = Math.max(
-      1,
-      Math.ceil((start+3000-Date.now())/1000)
-    );
-
-    msg = `🎯 ${remain}초 후 시작!`;
-  }
-
-  if (status==='playing') {
-    msg = room.moves.length%2===idx
-      ? '✅ 내 차례입니다'
-      : '상대방 차례입니다.';
-  }
-
-  if (room.status==='finished') {
-    msg = room.winner===0
-      ? '🤝 무승부!'
-      : room.winner===me.no
-        ? '🏆 승리!'
-        : '상대방 승리 · 다음에 다시 도전!';
-  }
-
-  if (room.status==='cancelled') {
-    msg = '취소된 대국입니다.';
-  }
-
-  $('omokStatus').textContent = msg;
-
-  const cells = boardFrom(room.moves);
-  const board = $('omokBoard');
-
-  const last = room.moves[room.moves.length-1];
-
-  board.replaceChildren();
-
-  for (let i=0;i<225;i++) {
-    const b = document.createElement('button');
-
-    b.type = 'button';
-
-    b.className =
-      'og-cell' +
-      (last && i===last.y*15+last.x
-        ? ' og-last'
-        : '');
-
-    b.setAttribute(
-      'aria-label',
-      `${Math.floor(i/15)+1}행 ${i%15+1}열`
-    );
-
-    if (cells[i]) {
-      const stone = document.createElement('span');
-
-      stone.className =
-        cells[i]===1
-          ? 'og-black'
-          : 'og-white';
-
-      b.append(stone);
-    }
-
-    b.disabled =
-      cells[i]!==0 ||
-      status!=='playing' ||
-      room.moves.length%2!==idx;
-
-    b.onclick = () =>
-      placeStone(i%15,Math.floor(i/15));
-
-    board.append(b);
-  }
-}
-
-// ===== 준비 버튼 =====
-
-$('omokReady').onclick = async () => {
-  if (!room || !uid) return;
-
-  try {
-    await runTransaction(db,async tx => {
-      const ref = doc(rooms,room.id);
-      const snapshot = await tx.get(ref);
-      const r = snapshot.data();
-
-      if (
-        !r ||
-        r.status!=='waiting' ||
-        r.players.length!==2
-      ) {
-        throw Error('준비할 수 없는 방입니다.');
-      }
-
-      const i = r.players.indexOf(uid);
-
-      if (i<0) throw Error('참가자가 아닙니다.');
-
-      const ready = [...r.ready];
-      ready[i] = !ready[i];
-
-      const both = ready.every(Boolean);
-
-      tx.update(ref,{
-        ready,
-        status:both?'countdown':'waiting',
-        startAt:both?serverTimestamp():null
-      });
-    });
-
-    err('');
-
-  } catch(e) {
-    err(e.message);
-  }
-};
-
-// ===== 오목 착수 =====
-
-async function placeStone(x,y) {
-  if (!room || !uid) return;
-
-  try {
-    await runTransaction(db,async tx => {
-      const ref = doc(rooms,room.id);
-      const s = await tx.get(ref);
-      const r = s.data();
-
-      if (
-        !r ||
-        !['countdown','playing'].includes(r.status)
-      ) {
-        throw Error('진행 중인 대국이 아닙니다.');
-      }
-
-      if (
-        r.status==='countdown' &&
-        (
-          !r.startAt ||
-          Date.now()<r.startAt.toMillis()+3000
-        )
-      ) {
-        throw Error(
-          '3초 카운트다운이 끝나지 않았습니다.'
-        );
-      }
-
-      const i = r.players.indexOf(uid);
-
-      if (
-        i<0 ||
-        r.moves.length%2!==i
-      ) {
-        throw Error('현재 내 차례가 아닙니다.');
-      }
-
-      if (
-        r.moves.some(m=>m.x===x&&m.y===y)
-      ) {
-        throw Error('이미 돌이 놓인 곳입니다.');
-      }
-
-      const next = [
-        ...r.moves,
-        {x,y,p:i+1}
-      ];
-
-      const cells = boardFrom(next);
-      const won = checkFive(cells,x,y,i+1);
-      const draw = !won && next.length>=225;
-
-      tx.update(ref,{
-        moves:next,
-        status:won||draw?'finished':'playing',
-        winner:won?r.nos[i]:(draw?0:null),
-        endedAt:won||draw?serverTimestamp():null
-      });
-    });
-
-    err('');
-
-  } catch(e) {
-    err('착수 실패: '+e.message);
-  }
-}
-
-// ===== 방 나가기 / 기권 =====
-
-$('omokExit').onclick = async () => {
-  if (!room || !uid) return;
-
-  const message = room.status==='playing'
-    ? '기권하면 상대방 승리로 기록됩니다. 계속할까요?'
-    : '방에서 나갈까요?';
-
-  if (!confirm(message)) return;
-
-  try {
-    await runTransaction(db,async tx => {
-      const ref = doc(rooms,room.id);
-      const s = await tx.get(ref);
-      const r = s.data();
-
-      if (!r || !r.players.includes(uid)) {
-        throw Error('방이 없습니다.');
-      }
-
-      const i = r.players.indexOf(uid);
-
-      if (r.status==='waiting') {
-        if (r.players.length===1) {
-          tx.update(ref,{status:'cancelled'});
-
-        } else {
-          const remain = 1-i;
-
-          tx.update(ref,{
-            players:[r.players[remain]],
-            nos:[r.nos[remain]],
-            ready:[false,false]
-          });
-        }
-
-      } else if (
-        ['countdown','playing'].includes(r.status)
-      ) {
-        const opponent = 1-i;
-
-        tx.update(ref,{
-          status:'finished',
-          winner:r.moves.length===0
-            ? 0
-            : r.nos[opponent],
-          endedAt:serverTimestamp()
-        });
-      }
-    });
-
-    stopRoom?.();
-    stopRoom = null;
-
-    room = null;
-    roomId = null;
-
-    renderRoom();
-    err('');
-
-  } catch(e) {
-    err('퇴장 실패: '+e.message);
-  }
-};
-
-// ===== 3초 카운트다운 갱신 =====
-
-setInterval(() => {
-  if (
-    viewOpen() &&
-    room?.status==='countdown'
-  ) {
-    renderRoom();
-  }
-},500);
-
-// ===== Firebase 실시간 대기방 / 전적 =====
-
-onAuthStateChanged(auth,async user => {
-  stopOpen?.();
-  stopMine?.();
-  stopRoom?.();
-
-  stopOpen = null;
-  stopMine = null;
-  stopRoom = null;
-
-  room = null;
-  roomId = null;
-
-  uid = null;
-  me = null;
-
-  openRooms = [];
-  myGames = [];
-
-  showButton();
-
-  if (!user) return;
-
-  try {
-    const s = await getDoc(
-      doc(db,'accounts',user.uid)
-    );
-
-    if (
-      auth.currentUser?.uid!==user.uid ||
-      !s.exists()
-    ) return;
-
-    const a = s.data();
-    const n = Number(a.studentId);
-
-    if (
-      a.role!=='student' ||
-      !valid(n)
-    ) return;
-
-    me = {role:'student',no:n};
-    uid = user.uid;
-
-    showButton();
-
-    // 대기방 실시간 조회
-    stopOpen = onSnapshot(
-      query(
-        rooms,
-        where(
-          'status',
-          'in',
-          ['waiting','countdown','playing']
-        )
-      ),
-      snapshot => {
-        openRooms = snapshot.docs.map(d=>({
-          id:d.id,
-          ...d.data()
-        }));
-
-        renderLists();
-      },
-      e => err(
-        '대기방 조회 실패: '+e.message
-      )
-    );
-
-    // 내가 참가한 모든 대국 조회
-    // 완료된 대국을 삭제하지 않으므로 누적 전적 계산 가능
-    stopMine = onSnapshot(
-      query(
-        rooms,
-        where('players','array-contains',uid)
-      ),
-      snapshot => {
-        myGames = snapshot.docs.map(d=>({
-          id:d.id,
-          ...d.data()
-        })).sort((a,b)=>
-          (b.createdAt?.toMillis?.()||0) -
-          (a.createdAt?.toMillis?.()||0)
-        );
-
-        renderLists();
-      },
-      e => err(
-        '전적 조회 실패: '+e.message
-      )
-    );
-
-  } catch(e) {
-    console.error(
-      '게임 로그인 확인 실패:',e
-    );
-  }
-});
-
+   }
+   if(a.role!=='student'||!valid(n))return;
+   uid=user.uid;self={role:'student',no:n};visibleNav();
+   unsubs.push(onSnapshot(query(rooms,where('status','in',['waiting','countdown','playing'])),s=>{allRooms=s.docs.map(d=>({id:d.id,...d.data()}));renderAll()},e=>tell(e.message)));
+   unsubs.push(onSnapshot(query(rooms,where('players','array-contains',uid)),s=>{myRooms=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.toMillis?.()||0)-(a.createdAt?.toMillis?.()||0));renderAll()},e=>tell(e.message)));
+   unsubs.push(onSnapshot(query(rooms,where('status','==','finished')),s=>{finished=s.docs.map(d=>({id:d.id,...d.data()}));renderAll()},e=>tell(e.message)));
+   await refreshDay();
+   const watchDay=()=>onSnapshot(lockRef(currentDay(),uid),s=>{todayUsed=s.exists();listeningDay=currentDay();renderAll()},e=>tell('오늘 1판 확인 오류: '+e.message));
+   let stopDay=watchDay();let day=currentDay();
+   const timer=setInterval(()=>{if(currentDay()!==day){day=currentDay();stopDay();todayUsed=false;stopDay=watchDay();renderAll()}},10000);
+   unsubs.push(()=>{stopDay();clearInterval(timer)});
+  }catch(e){console.error('오목 로그인 실패',e)}
+ });
 }
