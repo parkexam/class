@@ -1,0 +1,53 @@
+
+name: Sync Class Timetable
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    # 한국시간 월~금 오전 9:15~오후 5:45, 30분 간격
+    - cron: "15,45 0-8 * * 1-5"
+
+    # 한국시간 월~금 오전 8:45
+    - cron: "45 23 * * 0-4"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: class-timetable-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Comcigan parser
+        run: npm install --no-save comcigan-parser
+
+      - name: Fetch timetable
+        run: node scripts/sync-timetable.cjs
+
+      - name: Commit timetable JSON
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add timetable.json
+
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update class timetable"
+            git push
+          else
+            echo "No timetable changes"
+          fi
