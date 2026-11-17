@@ -205,6 +205,8 @@ delete v6.students[17];const v6save=()=>{if(window.ClassCloud?.active)return;try
 let v6TeacherTab='pending';
 let v6DemoRole='student';
 const v6Student=(id)=>v6.students[Number(id)]||{nickname:`${id}번 주민`,xp:0};
+/* 교사 전용 전체 내역 엑셀(export-xlsx.js)에 Firebase 최신 스냅샷을 넘긴다. */
+window.ClassV6Snapshot=()=>({students:v6.students,missions:v6.missions,submissions:v6.submissions,studyLogs:v6.studyLogs,events:v6.events,levels:honorData.levels,titles:honorData.titles,townXP:state.townXP});
 const v6Counts=(id)=>({approved:v6.submissions.filter(s=>s.studentId===id&&s.status==='approved').length,pending:v6.submissions.filter(s=>s.studentId===id&&s.status==='pending').length});
 function v6GrantXP(id,amount,reason){if(window.ClassCloud?.active){window.ClassCloud.grantXP(id,amount,reason);return false;}
  id=Number(id);amount=Math.max(0,Math.min(500,Math.round(Number(amount)||0)));
@@ -267,7 +269,7 @@ function openV6Teacher(tab=v6TeacherTab){if(window.ClassCloud?.active&&window.Cl
  if(tab==='pending')body=`<div class="v6grid"><div class="v6stat">승인 대기<b>${pending.length}건</b></div><div class="v6stat">누적 승인<b>${v6.submissions.filter(s=>s.status==='approved').length}건</b></div></div><div class="v6scroll">${pending.map(s=>{const m=v6.missions.find(m=>m.id===s.missionId);return `<div class="v6row"><h3>📨 ${s.studentId}번 · ${escapeText(m?.name||'미션 없음')} <span class="badge">+${m?.xp||0} XP</span></h3><p>${escapeText(s.detail)}</p><p>${escapeText(s.date)}</p><button class="primary" data-approve="${escapeText(s.id)}">✅ 승인</button><button class="primary secondary" data-reject="${escapeText(s.id)}">↩ 반려</button></div>`}).join('')||'<p class="v6hint">대기 중인 미션이 없어. 학생 캐릭터로 전환해서 미션을 먼저 제출해 봐.</p>'}</div>`;
  if(tab==='missions')body=`<label>새 미션 제목</label><input id="v6newName" class="field" maxlength="40" placeholder="예: 우리 반 탐구 일지"><label>미션 설명</label><textarea id="v6newDesc" class="field" maxlength="150" rows="2" placeholder="어떤 활동을 해야 하는지 작성"><label>승인 시 지급할 XP (1~100)</label><input id="v6newXp" class="field" type="number" min="1" max="100" value="30"><button id="v6create" class="primary wide" style="margin-top:9px">➕ 미션 등록</button><h3>현재 미션</h3><div class="v6scroll">${v6.missions.map(m=>`<div class="v6row"><h3>${escapeText(m.name)} · +${m.xp} XP</h3><p>${escapeText(m.desc)}</p><span class="badge">${m.active?'운영 중':'종료'}</span><button class="primary secondary" data-toggle="${escapeText(m.id)}">${m.active?'⏸ 종료':'▶ 재개'}</button></div>`).join('')}</div>`;
  if(tab==='members')body=`<p class="v6hint">번호를 눌러 개인 성장 카드 확인. 실명 대신 번호·별명만 사용.</p><div class="v6scroll"><table class="v6table"><thead><tr><th>학생</th><th>레벨</th><th>승인/대기</th><th>개인 XP</th><th>관리</th></tr></thead><tbody>${CLASS_IDS.map(id=>{const p=v6Student(id),c=v6Counts(id);return `<tr><td><b>${id}번</b></td><td>Lv.${studentLevel(id)}</td><td>${c.approved}/${c.pending}</td><td>${p.xp}</td><td><button class="primary secondary" data-profile="${id}">조회</button><button class="primary secondary" data-select="${id}">선택</button><button class="primary" data-grant="${id}">+XP</button></td></tr>`}).join('')}</tbody></table></div><p class="v6hint">학생별 칭호와 레벨의 직접 조정은 기존 👩🏻‍🏫 버튼에서 가능해.</p>`;
- if(tab==='records')body=`<div class="v6grid"><div class="v6stat">제출 총계<b>${v6.submissions.length}</b></div><div class="v6stat">공부 기록<b>${v6.studyLogs.length}</b></div><div class="v6stat">공동 경험치<b>${state.townXP}</b></div><div class="v6stat">등록 미션<b>${v6.missions.length}</b></div></div><h3>최근 경험치 지급 내역</h3><div class="v6scroll">${v6.events.slice(-25).reverse().map(e=>`<div class="choice">${e.studentId}번 +${e.amount} XP<br><small>${escapeText(e.reason)} · ${escapeText(e.date)}</small></div>`).join('')||'<p class="v6hint">아직 지급 기록이 없어.</p>'}</div><button id="v6export" class="primary secondary wide" style="margin-top:12px">📥 학급 운영 데이터 JSON 백업</button>`;
+ if(tab==='records')body=`<div class="v6grid"><div class="v6stat">제출 총계<b>${v6.submissions.length}</b></div><div class="v6stat">공부 기록<b>${v6.studyLogs.length}</b></div><div class="v6stat">공동 경험치<b>${state.townXP}</b></div><div class="v6stat">등록 미션<b>${v6.missions.length}</b></div></div><h3>최근 경험치 지급 내역</h3><div class="v6scroll">${v6.events.slice(-25).reverse().map(e=>`<div class="choice">${e.studentId}번 +${e.amount} XP<br><small>${escapeText(e.reason)} · ${escapeText(e.date)}</small></div>`).join('')||'<p class="v6hint">아직 지급 기록이 없어.</p>'}</div><button id="v6export" class="primary secondary wide" style="margin-top:12px">📥 학급 운영 데이터 JSON 백업</button>${window.ClassCloud?.active&&window.ClassCloud.role==='teacher'?`<button id="v6exportXlsx" class="primary wide" style="margin-top:8px">📥 전체 내역 엑셀(.xlsx) 다운로드</button><p class="v6hint">미션·칭찬 내역, 학생 현황, 공부 기록, 활동이력을 시트 4개로 한 파일에 담아. 엑셀 모듈을 못 불러오면 UTF-8 CSV로 대신 내려받아.</p>`:''}`;
  openModal('📋 학급 운영 관리자',head+body,el=>{
  $('modal').classList.add('teacherWide');
  const setupBtn=el.querySelector('#v9initClass');
@@ -285,6 +287,7 @@ function openV6Teacher(tab=v6TeacherTab){if(window.ClassCloud?.active&&window.Cl
  el.querySelectorAll('[data-select]').forEach(b=>b.onclick=()=>{state.chosen=Number(b.dataset.select);save();updatePlayerFromNpc();openV6Teacher('members');toast(`${state.chosen}번 학생으로 체험 대상을 변경했어`)});
  if(el.querySelector('#v6create'))el.querySelector('#v6create').onclick=()=>{const name=el.querySelector('#v6newName').value.trim(),desc=el.querySelector('#v6newDesc').value.trim(),xp=Number(el.querySelector('#v6newXp').value);if(name.length<2||name.length>40)return toast('미션 제목을 2~40자로 입력해 줘');if(!Number.isInteger(xp)||xp<1||xp>100)return toast('XP는 1~100 사이로 입력해 줘');if(window.ClassCloud?.active){window.ClassCloud.createMission(name,desc,xp);return;}v6.missions.push({id:'m'+Date.now()+Math.random().toString(36).slice(2,6),name,desc:desc.slice(0,150),xp,active:true});v6save();openV6Teacher('missions');toast('✅ 미션을 등록했어')};
  if(el.querySelector('#v6export'))el.querySelector('#v6export').onclick=()=>{const data={v6,honors:honorData,world:state,exportedAt:new Date().toISOString()};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='class-village-v6-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000)};
+ if(el.querySelector('#v6exportXlsx'))el.querySelector('#v6exportXlsx').onclick=()=>{if(window.ClassExport&&window.ClassExport.download)window.ClassExport.download();else toast('엑셀 내보내기 모듈을 불러오지 못했어. 새로고침 후 다시 시도해 줘')};
  });
 }
 
@@ -2632,6 +2635,7 @@ import {
 
 <script type="module" src="./class-ui.js"></script>
 <script type="module" src="./omok-online.js"></script>
+<script type="module" src="./export-xlsx.js"></script>
 
 
 <!-- =========================================
