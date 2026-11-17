@@ -1,5 +1,5 @@
 
-/* 1학년 12반 성장 여행 - 하루 1판 오목 + 누적 랭킹
+/* 1학년 12반 성장 여행 - 하루 3판 오목 + 누적 랭킹
    기존 omok-online.js 내용을 모두 교체해 사용
 */
 import {getApps} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
@@ -16,13 +16,18 @@ else {
  const valid=n=>Number.isInteger(n)&&n>=1&&n<=29&&n!==17;
  const nickname=n=>window.ClassStudentNames?.get(n)||`${n}번`;
  const dayIndex=()=>Math.floor((Date.now()+9*3600000)/86400000);
- const lockRef=(n,personUid)=>doc(locks,`${n}_${personUid}`);
+ const DAILY_LIMIT=3;
+ // 하루 3판: ${day}_${uid} (1판째) + ${day}_${uid}_2, ${day}_${uid}_3 (2·3판째)
+ // 이미 있는 슬롯은 절대 덮어쓰지 않고(create 전용 규칙 호환) 빈 슬롯에만 새 문서를 만든다.
+ const slotRef=(n,personUid,slot)=>doc(locks,slot===1?`${n}_${personUid}`:`${n}_${personUid}_${slot}`);
+ const daySlots=(n,personUid)=>Array.from({length:DAILY_LIMIT},(_,i)=>slotRef(n,personUid,i+1));
  const active=s=>['waiting','countdown','playing'].includes(s);
  let self=null, uid=null, room=null, stopRoom=null;
- let allRooms=[], myRooms=[], finished=[], todayUsed=false;
+ let allRooms=[], myRooms=[], finished=[], todayUsed=false, todayCount=0;
  let unsubs=[], listeningDay=null;
  const currentDay=()=>dayIndex();
  const tell=s=>{$('ogError').textContent=s||''};
+ const setTodayCount=c=>{todayCount=Math.max(0,Math.min(DAILY_LIMIT,c));todayUsed=todayCount>=DAILY_LIMIT};
 
  const style=document.createElement('style');
  style.textContent=`
@@ -56,7 +61,7 @@ else {
  overlay.id='ogOverlay';
  overlay.innerHTML=`
   <section id="ogDialog" role="dialog" aria-modal="true" aria-label="오목 온라인 대결">
-   <div class="row"><h2>🎮 온라인 오목 · 하루 1판</h2><button id="ogClose" class="light">닫기 ×</button></div>
+   <div class="row"><h2>🎮 온라인 오목 · 하루 3판</h2><button id="ogClose" class="light">닫기 ×</button></div>
    <p class="muted">2명 입장 → 모두 준비 → 3초 후 시작 · 한국시간 자정 초기화</p>
    <div id="ogError" role="alert"></div>
    <div class="panel"><b id="ogToday">오늘의 대국 확인 중…</b><div id="ogStats" class="muted"></div></div>
@@ -69,7 +74,7 @@ else {
     <div id="ogBoard"></div>
    </div>
    <div class="panel"><h3 style="margin:0 0 8px">🏆 누적 오목 랭킹</h3><p class="muted">승리 수 → 승률 → 대국 수 순 · 진행 중인 대국은 제외</p><table id="ogRanks"><thead><tr><th>순위</th><th>학생</th><th>승</th><th>패</th><th>무</th><th>승률</th></tr></thead><tbody id="ogRankRows"></tbody></table></div>
-   <p class="muted">대기방 생성만으로는 1판이 차감되지 않습니다. 시작 이후 기권하면 당일 추가 대국이 불가능합니다.</p>
+   <p class="muted">대기방 생성만으로는 판수가 차감되지 않습니다. 시작 이후 기권하면 그 대국이 1판으로 차감됩니다. 하루 3판까지 대국할 수 있어요.</p>
   </section>`;
  document.body.append(overlay);
  const viewing=()=>overlay.style.display==='flex';
@@ -107,7 +112,7 @@ else {
   const stats=winnerStats().find(r=>r.n===self.no)||{w:0,l:0,d:0};
   const meGames=stats.w+stats.l+stats.d;
   $('ogStats').textContent=`누적 ${meGames}전 ${stats.w}승 ${stats.l}패 ${stats.d}무 · 승률 ${(100*stats.w/(meGames||1)).toFixed(1)}%`;
-  $('ogToday').textContent=self.role==='teacher'?'👩‍🏫 교사용 학급 랭킹 조회':todayUsed?'🔒 오늘의 1판 사용 완료 · 내일 다시 도전!':'✅ 오늘 1판 대결 가능';
+  $('ogToday').textContent=self.role==='teacher'?'👩‍🏫 교사용 학급 랭킹 조회':todayUsed?'🔒 오늘의 3판 사용 완료 · 내일 다시 도전!':`✅ 오늘 남은 판수: ${DAILY_LIMIT-todayCount}/3판`;
   const ongoing=myRooms.find(r=>active(r.status));
   $('ogCreate').disabled=self.role==='teacher'||todayUsed||!!ongoing;
   const lobby=$('ogLobby');lobby.replaceChildren();
@@ -128,18 +133,20 @@ else {
   showRank();renderRoom();
  }
 
- async function refreshDay(){
+ async function refreshDay(force){
   if(!uid)return;
   const n=currentDay();
-  if(listeningDay===n)return;
+  if(listeningDay===n&&!force)return;
   listeningDay=n;
-  try{const s=await getDoc(lockRef(n,uid));if(currentDay()===n&&auth.currentUser?.uid===uid){todayUsed=s.exists();renderAll()}}catch(e){tell('하루 이용권 확인 실패: '+e.message)}
+  try{const snaps=await Promise.all(daySlots(n,uid).map(r=>getDoc(r)));if(currentDay()===n&&auth.currentUser?.uid===uid){setTodayCount(snaps.filter(s=>s.exists()).length);renderAll()}}catch(e){tell('하루 이용권 확인 실패: '+e.message)}
  }
 
  async function canStart(){
-  await refreshDay();
-  const s=await getDoc(lockRef(currentDay(),uid));
-  if(s.exists()){todayUsed=true;renderAll();throw Error('오늘은 이미 1판을 사용했어요.')}
+  const n=currentDay();
+  const snaps=await Promise.all(daySlots(n,uid).map(r=>getDoc(r)));
+  const used=snaps.filter(s=>s.exists()).length;
+  if(currentDay()===n)setTodayCount(used);renderAll();
+  if(used>=DAILY_LIMIT)throw Error('오늘은 이미 3판을 다 사용했어요.');
  }
 
  $('ogCreate').onclick=async()=>{
@@ -159,9 +166,8 @@ else {
    await canStart();
    if(myRooms.some(r=>active(r.status)))throw Error('이미 참여 중인 방이 있습니다.');
    await runTransaction(db,async tx=>{
-    const ref=doc(rooms,id),lock=lockRef(currentDay(),uid);
-    const s=await tx.get(ref),l=await tx.get(lock);
-    if(l.exists())throw Error('오늘의 1판을 이미 사용했어요.');
+    const ref=doc(rooms,id);
+    const s=await tx.get(ref);
     if(!s.exists())throw Error('방이 삭제됐습니다.');
     const r=s.data();
     if(r.status!=='waiting'||r.players.length!==1||r.players.includes(uid))throw Error('입장 가능한 방이 아닙니다.');
@@ -215,14 +221,20 @@ else {
     const ready=[...r.ready];ready[i]=!ready[i];
     if(ready.every(Boolean)){
      const d=currentDay();
-     const refs=r.players.map(id=>lockRef(d,id));
-     const existing=await Promise.all(refs.map(x=>tx.get(x)));
-     if(existing.some(x=>x.exists()))throw Error('두 학생 중 오늘 이미 대국한 학생이 있어요.');
+     const refs=r.players.map(id=>daySlots(d,id));
+     const existing=await Promise.all(refs.flat().map(x=>tx.get(x)));
+     const targets=[];
+     for(let j=0;j<r.players.length;j++){
+      const snaps=existing.slice(j*DAILY_LIMIT,(j+1)*DAILY_LIMIT);
+      const emptyAt=snaps.findIndex(x=>!x.exists());
+      if(emptyAt<0)throw Error('두 학생 중 오늘 3판을 모두 사용한 학생이 있어요.');
+      targets.push(refs[j][emptyAt]);
+     }
      tx.update(ref,{ready,status:'countdown',startAt:serverTimestamp(),dayIndex:d});
-     for(let j=0;j<2;j++)tx.set(refs[j],{uid:r.players[j],studentId:r.nos[j],roomId:room.id,dayIndex:d,startedAt:serverTimestamp()});
+     for(let j=0;j<r.players.length;j++)tx.set(targets[j],{uid:r.players[j],studentId:r.nos[j],roomId:room.id,dayIndex:d,startedAt:serverTimestamp()});
     } else tx.update(ref,{ready});
    });
-   tell('');await refreshDay();
+   tell('');await refreshDay(true);
   }catch(e){tell('준비 실패: '+e.message)}
  };
 
@@ -244,7 +256,7 @@ else {
 
  $('ogLeave').onclick=async()=>{
   if(!room||!uid||self?.role!=='student')return;
-  if(!confirm(['playing','countdown'].includes(room.status)?'기권하면 오늘의 1판이 사용됩니다. 나갈까요?':'대기방에서 나갈까요?'))return;
+  if(!confirm(['playing','countdown'].includes(room.status)?'기권하면 오늘의 1판이 차감됩니다. 나갈까요?':'대기방에서 나갈까요?'))return;
   try{
    await runTransaction(db,async tx=>{
     const ref=doc(rooms,room.id),s=await tx.get(ref);
@@ -266,7 +278,7 @@ else {
 
  onAuthStateChanged(auth,async user=>{
   for(const stop of unsubs)stop();unsubs=[];stopRoom?.();stopRoom=null;
-  room=null;self=null;uid=null;allRooms=[];myRooms=[];finished=[];todayUsed=false;listeningDay=null;
+  room=null;self=null;uid=null;allRooms=[];myRooms=[];finished=[];todayUsed=false;todayCount=0;listeningDay=null;
   visibleNav();overlay.style.display='none';
   if(!user)return;
   try{
@@ -284,9 +296,13 @@ else {
    unsubs.push(onSnapshot(query(rooms,where('players','array-contains',uid)),s=>{myRooms=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.toMillis?.()||0)-(a.createdAt?.toMillis?.()||0));renderAll()},e=>tell(e.message)));
    unsubs.push(onSnapshot(query(rooms,where('status','==','finished')),s=>{finished=s.docs.map(d=>({id:d.id,...d.data()}));renderAll()},e=>tell(e.message)));
    await refreshDay();
-   const watchDay=()=>onSnapshot(lockRef(currentDay(),uid),s=>{todayUsed=s.exists();listeningDay=currentDay();renderAll()},e=>tell('오늘 1판 확인 오류: '+e.message));
+   const watchDay=()=>{
+    const n=currentDay(),flags=Array(DAILY_LIMIT).fill(false);
+    const stops=daySlots(n,uid).map((r,i)=>onSnapshot(r,s=>{flags[i]=s.exists();listeningDay=n;setTodayCount(flags.filter(Boolean).length);renderAll()},e=>tell('오늘 판수 확인 오류: '+e.message)));
+    return()=>stops.forEach(stop=>stop());
+   };
    let stopDay=watchDay();let day=currentDay();
-   const timer=setInterval(()=>{if(currentDay()!==day){day=currentDay();stopDay();todayUsed=false;stopDay=watchDay();renderAll()}},10000);
+   const timer=setInterval(()=>{if(currentDay()!==day){day=currentDay();stopDay();setTodayCount(0);stopDay=watchDay();renderAll()}},10000);
    unsubs.push(()=>{stopDay();clearInterval(timer)});
   }catch(e){console.error('오목 로그인 실패',e)}
  });
